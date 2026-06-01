@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1.0",
+  "scanner": { "name": "meerkat", "version": "dev" },
+  "endpoint": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "hostname": "backend-01.prod.internal",
+    "os": "linux",
+    "arch": "amd64",
+    "user": "deploy",
+    "tags": ["prod", "backend"]
+  },
+  "scan": {
+    "id": "11111111-1111-1111-1111-111111111101",
+    "started_at": "2026-05-28T09:00:00.000000-03:00",
+    "finished_at": "2026-05-28T09:02:14.000000-03:00",
+    "root": "/srv",
+    "projects_scanned": 3,
+    "cache_hits": 1,
+    "cache_misses": 2
+  },
+  "packages": [
+    {
+      "name": "urllib3",
+      "version": "2.2.1",
+      "ecosystem": "pypi",
+      "purl": "pkg:pypi/urllib3@2.2.1",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/srv/api"]
+    },
+    {
+      "name": "requests",
+      "version": "2.31.0",
+      "ecosystem": "pypi",
+      "purl": "pkg:pypi/requests@2.31.0",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/srv/api"]
+    },
+    {
+      "name": "Pillow",
+      "version": "9.0.0",
+      "ecosystem": "pypi",
+      "purl": "pkg:pypi/Pillow@9.0.0",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/srv/media-worker"]
+    },
+    {
+      "name": "certifi",
+      "version": "2024.2.2",
+      "ecosystem": "pypi",
+      "purl": "pkg:pypi/certifi@2024.2.2",
+      "scope": "runtime",
+      "direct": false,
+      "kind": "project-dependency",
+      "dirs": ["/srv/api"]
+    },
+    {
+      "name": "idna",
+      "version": "3.6",
+      "ecosystem": "pypi",
+      "purl": "pkg:pypi/idna@3.6",
+      "scope": "runtime",
+      "direct": false,
+      "kind": "project-dependency",
+      "dirs": ["/srv/api"]
+    },
+    {
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "ecosystem": "golang",
+      "purl": "pkg:golang/github.com/google/uuid@v1.6.0",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/srv/jobs"]
+    }
+  ]
+}

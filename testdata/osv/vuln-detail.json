@@ -1,0 +1,8 @@
+{
+  "id": "GHSA-jf85-cpcp-j695",
+  "aliases": ["CVE-2019-10744"],
+  "summary": "Prototype Pollution in lodash",
+  "details": "Versions of lodash prior to 4.17.12 are vulnerable to Prototype Pollution.",
+  "published": "2019-07-10T00:00:00Z",
+  "modified": "2023-03-08T05:26:22Z"
+}
