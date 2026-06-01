@@ -1,0 +1,2278 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>meerkat</title>
+        <link rel="icon" type="image/png" href="/app/assets/favicon.ico" />
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            :root {
+                --primary: #000000;
+                --on-primary: #ffffff;
+                --ink: #000000;
+                --charcoal: #525252;
+                --body: #737373;
+                --mute: #a3a3a3;
+                --canvas: #ffffff;
+                --surface-soft: #fafafa;
+                --surface-dark: #171717;
+                --hairline: #e5e5e5;
+                --hairline-strong: #d4d4d4;
+                --on-dark: #ffffff;
+                --on-dark-mute: rgba(255, 255, 255, 0.7);
+                --focus-ring: rgba(59, 130, 246, 0.5);
+            }
+
+            body {
+                font-family:
+                    ui-sans-serif,
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                font-size: 16px;
+                line-height: 1.5;
+                color: var(--ink);
+                background: var(--canvas);
+            }
+
+            /* Nav */
+            nav {
+                height: 56px;
+                border-bottom: 1px solid var(--hairline);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 32px;
+            }
+            nav .brand {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 18px;
+                font-weight: 600;
+                color: var(--ink);
+                text-decoration: none;
+            }
+            nav .nav-right {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .badge-stale {
+                color: var(--mute);
+                font-size: 12px;
+            }
+            .nav-link {
+                font-size: 14px;
+                color: var(--charcoal);
+                text-decoration: none;
+                padding: 4px 8px;
+                border-radius: 9999px;
+            }
+            .nav-link:hover {
+                background: var(--surface-soft);
+            }
+
+            /* Settings page */
+            .settings-panel {
+                max-width: 480px;
+            }
+            .settings-panel h1 {
+                margin-bottom: 32px;
+            }
+            .settings-field {
+                margin-bottom: 24px;
+            }
+            .settings-field label {
+                display: block;
+                font-size: 14px;
+                font-weight: 500;
+                color: var(--ink);
+                margin-bottom: 6px;
+            }
+            .settings-field textarea {
+                width: 100%;
+                min-height: 100px;
+                padding: 8px 12px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 13px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 8px;
+                background: var(--canvas);
+                color: var(--ink);
+                resize: vertical;
+            }
+            .settings-field textarea:focus {
+                outline: none;
+                border-color: var(--ink);
+            }
+            .settings-toggle {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                cursor: pointer;
+            }
+            .settings-toggle input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+            }
+            .settings-hint {
+                font-size: 12px;
+                color: var(--mute);
+                margin-top: 4px;
+            }
+            .settings-feedback {
+                font-size: 13px;
+                margin-top: 12px;
+                min-height: 20px;
+            }
+            .settings-feedback.ok {
+                color: #16a34a;
+            }
+            .settings-feedback.err {
+                color: #dc2626;
+            }
+
+            /* Layout */
+            main {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 48px 32px 88px;
+            }
+
+            h1 {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 24px;
+                font-weight: 600;
+                line-height: 1.33;
+                color: var(--ink);
+                margin-bottom: 24px;
+            }
+
+            /* Status badges — pills */
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 10px;
+                border-radius: 9999px;
+                font-size: 12px;
+                font-weight: 500;
+                line-height: 1.33;
+                white-space: nowrap;
+            }
+            .badge-clean {
+                background: var(--surface-soft);
+                color: var(--charcoal);
+                border: 1px solid var(--hairline);
+            }
+            .badge-low {
+                background: var(--surface-soft);
+                color: var(--charcoal);
+                border: 1px solid var(--hairline);
+            }
+            .badge-moderate {
+                background: #fef9c3;
+                color: #854d0e;
+                border: 1px solid #fde047;
+            }
+            .badge-high {
+                background: #ffedd5;
+                color: #9a3412;
+                border: 1px solid #fdba74;
+            }
+            .badge-critical {
+                background: #fee2e2;
+                color: #991b1b;
+                border: 1px solid #fca5a5;
+            }
+            .badge-vulnerable {
+                background: var(--surface-dark);
+                color: var(--on-dark);
+            }
+            .badge-stale-pill {
+                background: var(--surface-soft);
+                color: var(--mute);
+                border: 1px solid var(--hairline);
+            }
+            .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 9999px;
+                display: inline-block;
+                flex-shrink: 0;
+            }
+            .dot-clean {
+                background: #27c93f;
+            }
+            .dot-low {
+                background: #94a3b8;
+            }
+            .dot-moderate {
+                background: #eab308;
+            }
+            .dot-high {
+                background: #f97316;
+            }
+            .dot-critical {
+                background: #ef4444;
+            }
+            .dot-vuln {
+                background: #ff5f56;
+            }
+            .dot-stale {
+                background: var(--mute);
+            }
+
+            /* Exposure bucket inline badges (vuln rows) */
+            .bucket-badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 1px 7px;
+                border-radius: 9999px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                white-space: nowrap;
+            }
+            .bucket-critical {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            .bucket-high {
+                background: #ffedd5;
+                color: #9a3412;
+            }
+            .bucket-moderate {
+                background: #fef9c3;
+                color: #854d0e;
+            }
+            .bucket-low {
+                background: var(--surface-soft);
+                color: var(--charcoal);
+            }
+            .bucket-clean {
+                display: none;
+            }
+
+            /* ── Endpoint vuln page ──────────────────────────────────────────── */
+            .ep-page {
+                padding: 32px 0;
+            }
+            .ep-page-back {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 14px;
+                color: var(--charcoal);
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 9999px;
+                margin-bottom: 24px;
+                border: none;
+                background: none;
+                text-decoration: none;
+            }
+            .ep-page-back:hover {
+                background: var(--surface-soft);
+            }
+            .ep-header {
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                gap: 24px;
+                align-items: stretch;
+                margin-bottom: 32px;
+            }
+            .ep-donut {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 0 8px;
+            }
+            .ep-donut-wrap {
+                position: relative;
+                display: inline-block;
+                cursor: default;
+            }
+            .ep-donut-tooltip {
+                position: absolute;
+                bottom: calc(100% + 8px);
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--surface-dark);
+                color: var(--on-dark);
+                border-radius: 8px;
+                padding: 8px 14px;
+                font-size: 11px;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.15s;
+                z-index: 100;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .ep-donut-wrap:hover .ep-donut-tooltip {
+                opacity: 1;
+            }
+            .ep-legend-item {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .ep-legend-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            .ep-info-card {
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                padding: 20px 24px;
+                display: flex;
+                flex-direction: column;
+            }
+            .ep-info-card h2 {
+                font-size: 20px;
+                font-weight: 500;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .es-info-wrap {
+                position: relative;
+                display: inline-flex;
+                align-items: center;
+            }
+            .es-info-icon {
+                font-style: normal;
+                font-size: 9px;
+                opacity: 0.5;
+                cursor: default;
+                margin-left: 2px;
+            }
+            .es-tooltip {
+                position: absolute;
+                bottom: calc(100% + 6px);
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--surface-dark);
+                color: var(--on-dark);
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 11px;
+                font-weight: 400;
+                line-height: 1.5;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.15s;
+                z-index: 100;
+            }
+            .es-info-wrap:hover .es-tooltip {
+                opacity: 1;
+            }
+            .vuln-pkg-count {
+                font-size: 11px;
+                color: var(--mute);
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            /* Expanded detail: aliases + description (left), dates stacked (right) */
+            .vuln-detail-top {
+                display: none;
+                align-items: flex-start;
+                gap: 16px 28px;
+                flex-wrap: wrap;
+                padding: 16px 26px;
+            }
+            .vuln-row-new.open .vuln-detail-top {
+                display: flex;
+            }
+            .vuln-detail-main {
+                flex: 1;
+                min-width: 240px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .vuln-aliases {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+            .vuln-dates {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                flex-shrink: 0;
+                font-size: 11px;
+                color: var(--charcoal);
+            }
+            .vuln-dates .vm-k {
+                color: var(--mute);
+            }
+            .pkg-purl-row td {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 10px;
+                color: var(--mute);
+                padding: 8px 10px 2px;
+                border-bottom: none !important;
+            }
+            /* 30-day timeline */
+            .ep-timeline {
+                display: flex;
+                gap: 3px;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 28px;
+            }
+            .ep-tl-label {
+                font-size: 11px;
+                color: var(--mute);
+                white-space: nowrap;
+            }
+            .tl-day {
+                width: 13px;
+                height: 13px;
+                border-radius: 2px;
+                flex-shrink: 0;
+                cursor: default;
+                transition: opacity 0.1s;
+            }
+            .tl-day:hover {
+                opacity: 0.75;
+            }
+            .tl-empty {
+                background: var(--hairline);
+            }
+            .tl-clean {
+                background: #86efac;
+            }
+            .tl-low {
+                background: #cbd5e1;
+            }
+            .tl-moderate {
+                background: #fde047;
+            }
+            .tl-high,
+            .tl-vulnerable {
+                background: #fdba74;
+            }
+            .tl-critical {
+                background: #fca5a5;
+            }
+            /* History metrics legend (under the timeline) */
+            .ep-metrics-legend {
+                display: flex;
+                gap: 20px;
+                justify-content: center;
+                flex-wrap: wrap;
+                margin: -16px 0 28px;
+            }
+            .ep-metric {
+                font-size: 12px;
+                display: inline-flex;
+                gap: 5px;
+                align-items: baseline;
+            }
+            .ep-metric-val {
+                font-weight: 600;
+                font-variant-numeric: tabular-nums;
+            }
+            .ep-metric-label {
+                color: var(--mute);
+            }
+            .delta-up {
+                color: var(--charcoal);
+            }
+            .delta-down {
+                color: var(--charcoal);
+            }
+            .delta-flat {
+                color: var(--mute);
+            }
+            /* Key/value grid inside the info card */
+            .ep-kv-grid {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                gap: 14px 28px;
+            }
+            .ep-kv {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                min-width: 0;
+            }
+            .ep-kv-label {
+                font-size: 11px;
+                color: var(--mute);
+                line-height: 1.2;
+            }
+            .ep-kv-value {
+                font-size: 13px;
+                color: var(--charcoal);
+                line-height: 1.3;
+                overflow-wrap: anywhere;
+            }
+            .ep-kv-value code {
+                font-size: 12px;
+            }
+            /* Scan metrics grid — divided from identity by a hairline */
+            .ep-scan-row {
+                margin-top: 14px;
+                padding-top: 14px;
+                border-top: 1px solid var(--hairline);
+            }
+            /* Canonical vuln meta line */
+            .vuln-new {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+                color: #ffffff;
+                background: #ea580c;
+                border-radius: 9999px;
+                padding: 1px 7px;
+                white-space: nowrap;
+            }
+            .vuln-tag {
+                font-size: 11px;
+                color: var(--charcoal);
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: 9999px;
+                padding: 1px 8px;
+                white-space: nowrap;
+            }
+            /* Filter bar */
+            .vuln-filter-bar {
+                display: flex;
+                gap: 12px;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .vuln-filter-left {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex: 1;
+            }
+            .vuln-search-input {
+                flex: 1;
+                max-width: 320px;
+                height: 36px;
+                padding: 0 12px;
+                font-size: 13px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 9999px;
+                background: var(--canvas);
+                color: var(--ink);
+                outline: none;
+            }
+            .vuln-search-input:focus {
+                border-color: var(--ink);
+            }
+            .vuln-bucket-select {
+                height: 36px;
+                padding: 0 34px 0 16px;
+                font-size: 13px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 9999px;
+                background-color: var(--canvas);
+                color: var(--ink);
+                outline: none;
+                cursor: pointer;
+                -webkit-appearance: none;
+                appearance: none;
+                background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23737373' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+                background-repeat: no-repeat;
+                background-position: right 14px center;
+            }
+            .vuln-pagination {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 13px;
+                color: var(--charcoal);
+            }
+            .page-btn {
+                height: 32px;
+                min-width: 32px;
+                padding: 0 10px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 9999px;
+                background: var(--canvas);
+                color: var(--charcoal);
+                font-size: 13px;
+                cursor: pointer;
+            }
+            .page-btn:disabled {
+                opacity: 0.35;
+                cursor: default;
+            }
+            .page-btn:not(:disabled):hover {
+                background: var(--surface-soft);
+            }
+            /* Vuln list new */
+            .vuln-list-new {
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .vuln-row-new {
+                border-bottom: 1px solid var(--hairline);
+            }
+            .vuln-row-new:last-child {
+                border-bottom: none;
+            }
+            .vuln-row-header {
+                padding: 14px 20px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                cursor: pointer;
+                user-select: none;
+                justify-content: space-between;
+            }
+            .vuln-row-header:hover {
+                background: var(--surface-soft);
+            }
+            .vuln-row-header-left {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+                flex: 1;
+                min-width: 0;
+            }
+            .vuln-row-header-right {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 8px;
+                flex-wrap: wrap;
+                flex-shrink: 0;
+            }
+            .vuln-cid {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--ink);
+                white-space: nowrap;
+            }
+            .vuln-alias-chip {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 11px;
+                padding: 1px 6px;
+                border: 1px solid var(--hairline);
+                border-radius: 6px;
+                color: var(--charcoal);
+                white-space: nowrap;
+            }
+            .vuln-chevron {
+                color: var(--mute);
+                font-size: 11px;
+                transition: transform 0.15s;
+                flex-shrink: 0;
+            }
+            .vuln-chevron.open {
+                transform: rotate(90deg);
+            }
+            .vuln-row-summary {
+                font-size: 13px;
+                color: var(--body);
+            }
+            .vuln-pkg-area {
+                padding: 0 20px 16px;
+                display: none;
+            }
+            .vuln-row-new.open .vuln-pkg-area {
+                display: block;
+            }
+            .pkg-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px;
+            }
+            .pkg-table th {
+                text-align: left;
+                font-weight: 500;
+                color: var(--mute);
+                font-size: 11px;
+                padding: 6px 10px;
+                border-bottom: 1px solid var(--hairline);
+            }
+            .pkg-table td {
+                padding: 8px 10px;
+                border-bottom: 1px solid var(--hairline);
+                vertical-align: top;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                color: var(--charcoal);
+            }
+            .pkg-table tr:last-child td {
+                border-bottom: none;
+            }
+            .pkg-purl-cell {
+                max-width: 220px;
+                word-break: break-all;
+                font-size: 11px;
+            }
+            .pkg-dirs-cell {
+                font-size: 11px;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .pkg-dir-item {
+                color: var(--body);
+            }
+
+            /* Endpoint cards */
+            .endpoint-list {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .endpoint-card {
+                background: var(--canvas);
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                padding: 16px 20px;
+                cursor: pointer;
+                transition: border-color 0.1s;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }
+            .endpoint-card:hover {
+                border-color: var(--hairline-strong);
+            }
+            .endpoint-card.active {
+                border-color: var(--ink);
+            }
+
+            .endpoint-main {
+                flex: 1;
+                min-width: 0;
+            }
+            .endpoint-hostname {
+                font-size: 14px;
+                font-weight: 500;
+                line-height: 1.43;
+                color: var(--ink);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .endpoint-meta {
+                font-size: 12px;
+                color: var(--mute);
+                margin-top: 2px;
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            /* Tag pills */
+            .tag {
+                display: inline-block;
+                padding: 2px 8px;
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: 9999px;
+                font-size: 11px;
+                color: var(--charcoal);
+            }
+
+            /* Detail panel */
+            .detail-panel {
+                margin-top: 24px;
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .detail-header {
+                padding: 20px 24px 16px;
+                border-bottom: 1px solid var(--hairline);
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 16px;
+            }
+            .detail-title {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 20px;
+                font-weight: 500;
+                color: var(--ink);
+            }
+            .detail-sub {
+                font-size: 13px;
+                color: var(--body);
+                margin-top: 4px;
+            }
+
+            /* Vuln rows */
+            .vuln-list {
+            }
+            .vuln-row {
+                padding: 16px 24px;
+                border-bottom: 1px solid var(--hairline);
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 8px 16px;
+                align-items: start;
+            }
+            .vuln-row:last-child {
+                border-bottom: none;
+            }
+            .vuln-id {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--ink);
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .vuln-refs {
+                display: inline-flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .vuln-ref-chip {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 11px;
+                padding: 2px 8px;
+                border-radius: 6px;
+                border: 1px solid var(--hairline);
+                background: var(--surface-soft);
+                color: var(--charcoal);
+                text-decoration: none;
+                white-space: nowrap;
+            }
+            a.vuln-ref-chip:hover {
+                border-color: var(--ink);
+            }
+            .vuln-summary {
+                font-size: 13px;
+                color: var(--body);
+                margin-top: 2px;
+                grid-column: 1;
+            }
+            .vuln-packages {
+                font-size: 12px;
+                color: var(--mute);
+                margin-top: 4px;
+                grid-column: 1 / -1;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .pkg-chip {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 11px;
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: 6px;
+                padding: 4px 8px;
+                color: var(--charcoal);
+                display: inline-flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .pkg-dirs {
+                display: flex;
+                flex-direction: column;
+                gap: 1px;
+            }
+            .pkg-dir {
+                font-size: 10px;
+                color: var(--mute);
+            }
+
+            /* Empty state */
+            .empty {
+                padding: 48px 0;
+                text-align: center;
+                color: var(--mute);
+                font-size: 14px;
+            }
+
+            /* Error banner */
+            .error-banner {
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 14px;
+                color: var(--charcoal);
+                margin-bottom: 24px;
+            }
+
+            /* Button */
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 16px;
+                height: 32px;
+                border-radius: 9999px;
+                font-size: 13px;
+                font-weight: 500;
+                line-height: 1;
+                cursor: pointer;
+                border: 1px solid var(--hairline-strong);
+                background: var(--canvas);
+                color: var(--ink);
+                text-decoration: none;
+            }
+            .btn:hover {
+                border-color: var(--ink);
+            }
+
+            /* Section header */
+            .section-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 16px;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
+            .count-label {
+                font-size: 13px;
+                color: var(--mute);
+                margin-left: 8px;
+                font-weight: 400;
+            }
+            .controls-bar {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            /* View toggle */
+            .view-toggle {
+                display: inline-flex;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 9999px;
+                overflow: hidden;
+            }
+            .toggle-btn {
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: var(--mute);
+                line-height: 1.5;
+            }
+            .toggle-btn.active {
+                background: var(--ink);
+                color: var(--on-dark);
+            }
+
+            /* Tag filter */
+            .tag-filter {
+                display: flex;
+                gap: 4px;
+                flex-wrap: wrap;
+            }
+            .tag-filter-btn {
+                padding: 3px 10px;
+                border-radius: 9999px;
+                font-size: 12px;
+                cursor: pointer;
+                border: 1px solid var(--hairline);
+                background: var(--canvas);
+                color: var(--mute);
+                line-height: 1.5;
+            }
+            .tag-filter-btn.active {
+                border-color: var(--ink);
+                color: var(--ink);
+            }
+
+            /* Panel grid */
+            .panel-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+                gap: 6px;
+            }
+            .panel-cell {
+                border-radius: 10px;
+                padding: 0;
+                cursor: pointer;
+                aspect-ratio: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+                border: 1px solid transparent;
+                transition: border-color 0.1s;
+            }
+            .panel-cell:hover {
+                border-color: rgba(0, 0, 0, 0.2);
+            }
+            .panel-cell.active {
+                border-color: var(--ink);
+            }
+
+            .panel-clean {
+                background: #16a34a;
+                color: #ffffff;
+            }
+            .panel-low {
+                background: #64748b;
+                color: #ffffff;
+            }
+            .panel-moderate {
+                background: #ca8a04;
+                color: #ffffff;
+            }
+            .panel-high {
+                background: #ea580c;
+                color: #ffffff;
+            }
+            .panel-critical {
+                background: #dc2626;
+                color: #ffffff;
+            }
+            .panel-vulnerable {
+                background: #dc2626;
+                color: #ffffff;
+            }
+            .panel-stale {
+                background: var(--surface-soft);
+                color: var(--mute);
+                border-color: var(--hairline);
+            }
+
+            .panel-count {
+                font-size: 15px;
+                font-weight: 600;
+                line-height: 1;
+            }
+
+            /* Tooltip */
+            .panel-cell::after {
+                content: attr(data-tip);
+                position: absolute;
+                bottom: calc(100% + 6px);
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--surface-dark);
+                color: var(--on-dark);
+                font-size: 11px;
+                line-height: 1.5;
+                padding: 6px 10px;
+                border-radius: 8px;
+                white-space: pre;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.15s;
+                z-index: 10;
+                min-width: max-content;
+            }
+            .panel-cell:hover::after {
+                opacity: 1;
+            }
+
+            @media (max-width: 600px) {
+                main {
+                    padding: 32px 16px 64px;
+                }
+                nav {
+                    padding: 0 16px;
+                }
+                .detail-header {
+                    flex-direction: column;
+                }
+            }
+
+            /* Login page */
+            .login-wrap {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: calc(100vh - 56px);
+            }
+            .login-card {
+                width: 100%;
+                max-width: 380px;
+                border: 1px solid var(--hairline);
+                border-radius: 12px;
+                padding: 40px 36px;
+            }
+            .login-brand {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                margin-bottom: 28px;
+            }
+            /* Icon links (GitHub / Docs / Install) — login card + nav */
+            .icon-link {
+                color: var(--mute);
+                display: inline-flex;
+                align-items: center;
+            }
+            .icon-link:hover {
+                color: var(--ink);
+            }
+            .icon-link svg {
+                width: 20px;
+                height: 20px;
+                display: block;
+            }
+            .login-links {
+                display: flex;
+                justify-content: center;
+                gap: 22px;
+                margin-top: 24px;
+                padding-top: 20px;
+                border-top: 1px solid var(--hairline);
+            }
+            .nav-icons {
+                display: inline-flex;
+                align-items: center;
+                gap: 14px;
+                margin-right: 4px;
+            }
+            .login-brand img {
+                height: 36px;
+                width: 36px;
+                object-fit: contain;
+            }
+            .login-brand span {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 20px;
+                font-weight: 600;
+                color: var(--ink);
+            }
+            .login-card h1 {
+                font-size: 20px;
+                margin-bottom: 8px;
+                text-align: center;
+            }
+            .login-card p {
+                font-size: 14px;
+                color: var(--body);
+                margin-bottom: 28px;
+                text-align: center;
+            }
+            .login-field {
+                margin-bottom: 16px;
+            }
+            .login-field label {
+                display: block;
+                font-size: 13px;
+                font-weight: 500;
+                margin-bottom: 6px;
+            }
+            .login-field input {
+                width: 100%;
+                padding: 8px 12px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 13px;
+                border: 1px solid var(--hairline-strong);
+                border-radius: 8px;
+                background: var(--canvas);
+                color: var(--ink);
+            }
+            .login-field input:focus {
+                outline: none;
+                border-color: var(--ink);
+            }
+            .login-error {
+                font-size: 13px;
+                color: #dc2626;
+                min-height: 20px;
+                margin-bottom: 12px;
+            }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <span class="brand">
+                <img
+                    src="/app/assets/meerkat-icon.png"
+                    alt=""
+                    style="
+                        height: 45px;
+                        width: 45px;
+                        object-fit: contain;
+                        vertical-align: middle;
+                        margin-right: 6px;
+                    "
+                />meerkat
+            </span>
+            <div class="nav-right">
+                <span id="last-refresh" class="badge-stale"></span>
+                <span class="nav-icons" id="nav-icons"></span>
+                <a
+                    class="nav-link"
+                    href="/app/settings"
+                    onclick="
+                        navigateTo('/app/settings');
+                        return false;
+                    "
+                    >Settings</a
+                >
+                <button class="btn" onclick="goHome()">↻ Refresh</button>
+                <button
+                    class="btn"
+                    id="btn-logout"
+                    onclick="doLogout()"
+                    style="display: none"
+                >
+                    Sign out
+                </button>
+            </div>
+        </nav>
+
+        <main>
+            <div id="error-container"></div>
+
+            <div id="login-section" style="display: none">
+                <div class="login-wrap">
+                    <div class="login-card">
+                        <div class="login-brand">
+                            <img src="/app/assets/meerkat-icon.png" alt="" />
+                            <span>meerkat</span>
+                        </div>
+                        <h1>Sign in</h1>
+                        <p>Enter your API key to access meerkat.</p>
+                        <div class="login-field">
+                            <label for="login-key">API key</label>
+                            <input
+                                type="password"
+                                id="login-key"
+                                placeholder="mk_..."
+                                autocomplete="current-password"
+                                onkeydown="
+                                    if (event.key === 'Enter') doLogin();
+                                "
+                            />
+                        </div>
+                        <div class="login-error" id="login-error"></div>
+                        <button
+                            class="btn"
+                            style="width: 100%"
+                            onclick="doLogin()"
+                        >
+                            Sign in
+                        </button>
+                        <div class="login-links" id="login-links"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header">
+                <h1>
+                    Endpoints <span id="count-label" class="count-label"></span>
+                </h1>
+                <div class="controls-bar">
+                    <div id="tag-filter" class="tag-filter"></div>
+                    <div class="view-toggle">
+                        <button
+                            id="btn-list"
+                            class="toggle-btn active"
+                            onclick="setView('list')"
+                        >
+                            ☰ List
+                        </button>
+                        <button
+                            id="btn-panel"
+                            class="toggle-btn"
+                            onclick="setView('panel')"
+                        >
+                            ⊞ Panel
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="endpoint-list"></div>
+
+            <div id="detail-container" style="display: none"></div>
+
+            <div id="vuln-page" style="display: none"></div>
+
+            <div id="settings-container" style="display: none">
+                <div class="settings-panel">
+                    <h1>Settings</h1>
+                    <div class="settings-field">
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="email-enabled" />
+                            Email notifications
+                        </label>
+                    </div>
+                    <div class="settings-field">
+                        <label for="email-recipients">Recipients</label>
+                        <textarea
+                            id="email-recipients"
+                            placeholder="one@example.com&#10;two@example.com"
+                        ></textarea>
+                        <div class="settings-hint">
+                            One email address per line.
+                        </div>
+                    </div>
+                    <button class="btn" onclick="saveSettings()">Save</button>
+                    <div id="settings-feedback" class="settings-feedback"></div>
+                </div>
+            </div>
+        </main>
+
+        <script>
+            let selectedID = null;
+            let viewMode = localStorage.getItem("meerkat.viewMode") || "list";
+            let activeTag = null;
+            let allEndpoints = [];
+            let totalCount = 0;
+
+            // ── view / tag state ─────────────────────────────────────────────────────
+
+            function setView(mode) {
+                viewMode = mode;
+                localStorage.setItem("meerkat.viewMode", mode);
+                document
+                    .getElementById("btn-list")
+                    .classList.toggle("active", mode === "list");
+                document
+                    .getElementById("btn-panel")
+                    .classList.toggle("active", mode === "panel");
+                render();
+            }
+
+            function setTag(tag) {
+                activeTag = tag;
+                render();
+            }
+
+            // ── helpers ───────────────────────────────────────────────────────────────
+
+            function statusBadge(status, vulnCount) {
+                const buckets = ["critical", "high", "moderate", "low"];
+                if (buckets.includes(status))
+                    return `<span class="badge badge-${status}"><span class="dot dot-${status}"></span>${vulnCount} vuln${vulnCount !== 1 ? "s" : ""}</span>`;
+                if (status === "vulnerable")
+                    return `<span class="badge badge-vulnerable"><span class="dot dot-vuln"></span>${vulnCount} vuln${vulnCount !== 1 ? "s" : ""}</span>`;
+                if (status === "stale")
+                    return `<span class="badge badge-stale-pill"><span class="dot dot-stale"></span>${vulnCount > 0 ? vulnCount + " vuln" + (vulnCount !== 1 ? "s" : "") : "stale"}</span>`;
+                return `<span class="badge badge-clean"><span class="dot dot-clean"></span>clean</span>`;
+            }
+
+            function relativeTime(iso) {
+                if (!iso) return "";
+                const diff = Date.now() - new Date(iso).getTime();
+                const m = Math.floor(diff / 60000);
+                if (m < 1) return "just now";
+                if (m < 60) return `${m}m ago`;
+                const h = Math.floor(m / 60);
+                if (h < 24) return `${h}h ago`;
+                return `${Math.floor(h / 24)}d ago`;
+            }
+
+            // Long-form "X ago" — days/weeks/months/years for date fields.
+            function fmtAgo(iso) {
+                if (!iso) return "";
+                const diff = Date.now() - new Date(iso).getTime();
+                const sec = Math.floor(diff / 1000);
+                if (sec < 60) return "just now";
+                const min = Math.floor(sec / 60);
+                if (min < 60) return `${min} min ago`;
+                const h = Math.floor(min / 60);
+                if (h < 24) return `${h}h ago`;
+                const d = Math.floor(h / 24);
+                if (d < 7) return `${d} day${d !== 1 ? "s" : ""} ago`;
+                const w = Math.floor(d / 7);
+                if (d < 30) return `${w} week${w !== 1 ? "s" : ""} ago`;
+                const mo = Math.floor(d / 30);
+                if (d < 365) return `${mo} month${mo !== 1 ? "s" : ""} ago`;
+                const y = Math.floor(d / 365);
+                return `${y} year${y !== 1 ? "s" : ""} ago`;
+            }
+
+            // DD/MM/YYYY (X ago) — the canonical date format across the app.
+            function fmtDate(iso) {
+                if (!iso) return "—";
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return "—";
+                const dd = String(d.getDate()).padStart(2, "0");
+                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                return `${dd}/${mm}/${d.getFullYear()} (${fmtAgo(iso)})`;
+            }
+
+            function fmtMillis(ms) {
+                if (!ms || ms <= 0) return "—";
+                if (ms < 1000) return `${ms}ms`;
+                return `${(ms / 1000).toFixed(1)}s`;
+            }
+
+            // Ecosystems aren't semantic, so the projects ring uses a neutral gray
+            // ramp (per DESIGN.md: no brand colors) instead of the severity palette.
+            const ECO_LABELS = {
+                npm: "JS",
+                pypi: "Python",
+                golang: "Go",
+                cargo: "Rust",
+                conan: "C/C++",
+            };
+            const ECO_RAMP = [
+                "#737373",
+                "#a3a3a3",
+                "#c2c2c2",
+                "#d4d4d4",
+                "#e5e5e5",
+            ];
+
+            function renderTags(tags) {
+                if (!tags || !tags.length) return "";
+                return tags
+                    .map((t) => `<span class="tag">${t}</span>`)
+                    .join("");
+            }
+
+            // ── data loading ──────────────────────────────────────────────────────────
+
+            async function loadEndpoints() {
+                try {
+                    const res = await apiFetch("/v1/endpoints");
+                    if (!res || !res.ok)
+                        throw new Error(
+                            res ? `HTTP ${res.status}` : "redirected",
+                        );
+                    const data = await res.json();
+                    allEndpoints = data.endpoints || [];
+                    totalCount = data.total || 0;
+                    document.getElementById("error-container").innerHTML = "";
+                    document.getElementById("last-refresh").textContent =
+                        "Updated " + relativeTime(new Date().toISOString());
+                    render();
+                } catch (e) {
+                    document.getElementById("error-container").innerHTML =
+                        `<div class="error-banner">Could not reach server — ${e.message}</div>`;
+                }
+            }
+
+            // ── tag filter pills ──────────────────────────────────────────────────────
+
+            function renderTagFilter() {
+                const tags = [
+                    ...new Set(allEndpoints.flatMap((ep) => ep.tags || [])),
+                ].sort();
+                const tf = document.getElementById("tag-filter");
+                if (!tags.length) {
+                    tf.innerHTML = "";
+                    return;
+                }
+                tf.innerHTML = [null, ...tags]
+                    .map(
+                        (t) => `
+      <button class="tag-filter-btn${activeTag === t ? " active" : ""}"
+              onclick="setTag(${t === null ? "null" : `'${t}'`})">
+        ${t === null ? "All" : t}
+      </button>`,
+                    )
+                    .join("");
+            }
+
+            // ── main render ───────────────────────────────────────────────────────────
+
+            function render() {
+                renderTagFilter();
+
+                const filtered = activeTag
+                    ? allEndpoints.filter((ep) =>
+                          (ep.tags || []).includes(activeTag),
+                      )
+                    : allEndpoints;
+
+                document.getElementById("count-label").textContent = totalCount
+                    ? `(${totalCount})`
+                    : "";
+
+                viewMode === "panel"
+                    ? renderPanel(filtered)
+                    : renderList(filtered);
+            }
+
+            // ── list view ─────────────────────────────────────────────────────────────
+
+            function renderList(endpoints) {
+                const el = document.getElementById("endpoint-list");
+                el.className = "endpoint-list";
+
+                if (!endpoints.length) {
+                    el.innerHTML =
+                        '<div class="empty">No endpoints yet. Run <code>meerkat scan</code> to get started.</div>';
+                    return;
+                }
+
+                el.innerHTML = endpoints
+                    .map(
+                        (ep) => `
+      <div class="endpoint-card${ep.id === selectedID ? " active" : ""}"
+           onclick="selectEndpoint('${ep.id}', this)">
+        <div class="endpoint-main">
+          <div class="endpoint-hostname">${ep.hostname}</div>
+          <div class="endpoint-meta">
+            <span>${ep.os} / ${ep.arch}</span>
+            <span>${relativeTime(ep.last_seen)}</span>
+            ${renderTags(ep.tags)}
+          </div>
+        </div>
+        ${statusBadge(ep.status, ep.vuln_count)}
+      </div>`,
+                    )
+                    .join("");
+            }
+
+            // ── panel view ────────────────────────────────────────────────────────────
+
+            function renderPanel(endpoints) {
+                const el = document.getElementById("endpoint-list");
+                el.className = "panel-grid";
+
+                if (!endpoints.length) {
+                    el.innerHTML =
+                        '<div class="empty">No endpoints yet. Run <code>meerkat scan</code> to get started.</div>';
+                    return;
+                }
+
+                el.innerHTML = endpoints
+                    .map((ep) => {
+                        const buckets = ["critical", "high", "moderate", "low"];
+                        const statusClass = buckets.includes(ep.status)
+                            ? `panel-${ep.status}`
+                            : ep.status === "vulnerable"
+                              ? "panel-vulnerable"
+                              : ep.status === "stale"
+                                ? "panel-stale"
+                                : "panel-clean";
+                        const tip = `${ep.hostname}\n${ep.os} / ${ep.arch}`;
+                        const showCount = [
+                            "critical",
+                            "high",
+                            "moderate",
+                            "low",
+                            "vulnerable",
+                        ].includes(ep.status);
+                        const count = showCount
+                            ? `<span class="panel-count">${ep.vuln_count}</span>`
+                            : ep.status === "stale"
+                              ? `<span class="panel-count">${ep.vuln_count > 0 ? ep.vuln_count : "—"}</span>`
+                              : `<span class="panel-count">OK</span>`;
+                        return `
+        <div class="panel-cell ${statusClass}${ep.id === selectedID ? " active" : ""}"
+             data-tip="${tip}"
+             onclick="selectEndpoint('${ep.id}', this)">
+          ${count}
+        </div>`;
+                    })
+                    .join("");
+            }
+
+            // ── detail (navigate to vuln page) ────────────────────────────────────────
+
+            function selectEndpoint(id) {
+                navigateTo(`/app/endpoint/${encodeURIComponent(id)}`);
+            }
+
+            // Sync toggle buttons to persisted state before first render
+            document
+                .getElementById("btn-list")
+                .classList.toggle("active", viewMode === "list");
+            document
+                .getElementById("btn-panel")
+                .classList.toggle("active", viewMode === "panel");
+
+            // ── routing ───────────────────────────────────────────────────────────────
+
+            function showMain() {
+                document.getElementById("login-section").style.display = "none";
+                document.getElementById("btn-logout").style.display = "";
+                document.querySelector(".section-header").style.display = "";
+                document.getElementById("endpoint-list").style.display = "";
+                document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("settings-container").style.display =
+                    "none";
+            }
+
+            function showSettings() {
+                document.getElementById("login-section").style.display = "none";
+                document.getElementById("btn-logout").style.display = "";
+                document.querySelector(".section-header").style.display =
+                    "none";
+                document.getElementById("endpoint-list").style.display = "none";
+                document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("settings-container").style.display =
+                    "";
+                loadSettings();
+            }
+
+            function goHome() {
+                navigateTo("/app");
+            }
+
+            function showLogin() {
+                document.getElementById("login-section").style.display = "";
+                document.querySelector(".section-header").style.display =
+                    "none";
+                document.getElementById("endpoint-list").style.display = "none";
+                document.getElementById("detail-container").style.display =
+                    "none";
+                document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("settings-container").style.display =
+                    "none";
+                document.getElementById("login-error").textContent = "";
+            }
+
+            async function doLogin() {
+                const key = document.getElementById("login-key").value.trim();
+                if (!key) {
+                    document.getElementById("login-error").textContent =
+                        "API key is required.";
+                    return;
+                }
+                try {
+                    const res = await fetch("/app/login", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ key }),
+                    });
+                    if (res.ok) {
+                        document.getElementById("login-key").value = "";
+                        navigateTo("/app");
+                    } else {
+                        const data = await res.json().catch(() => ({}));
+                        document.getElementById("login-error").textContent =
+                            data.detail || "Invalid key.";
+                    }
+                } catch (e) {
+                    document.getElementById("login-error").textContent =
+                        "Request failed: " + e.message;
+                }
+            }
+
+            async function doLogout() {
+                await fetch("/app/logout", { method: "POST" });
+                navigateTo("/app/login");
+            }
+
+            // Intercept 401 from any API call and redirect to login.
+            async function apiFetch(url, opts) {
+                const res = await fetch(url, opts);
+                if (res.status === 401) {
+                    navigateTo("/app/login");
+                    return null;
+                }
+                return res;
+            }
+
+            function handleRoute(path) {
+                const rel = path.startsWith("/app")
+                    ? path.slice("/app".length) || "/"
+                    : path;
+                // The nav is app chrome — hide it on the login gate.
+                document.querySelector("nav").style.display =
+                    rel === "/login" ? "none" : "flex";
+                if (rel === "/login") {
+                    showLogin();
+                } else if (rel === "/settings") {
+                    showSettings();
+                } else if (rel.startsWith("/endpoint/")) {
+                    const id = decodeURIComponent(
+                        rel.slice("/endpoint/".length),
+                    );
+                    loadVulnPage(id);
+                } else {
+                    showMain();
+                    loadEndpoints();
+                }
+            }
+
+            function navigateTo(path) {
+                history.pushState({}, "", path);
+                handleRoute(path);
+            }
+
+            window.addEventListener("popstate", () =>
+                handleRoute(location.pathname),
+            );
+
+            // ── vuln page ─────────────────────────────────────────────────────────────
+
+            let vpEndpoint = null;
+            let vpId = null;
+            let vpAllVulns = [];
+            let vpHistory = [];
+            let vpFiltered = [];
+            let vpPage = 0;
+            let vpSearch = "";
+            let vpBucket = "";
+            let vpSort = "exposure";
+            const VP_PER_PAGE = 20;
+            const vpOpenRows = new Set();
+
+            async function loadVulnPage(id) {
+                document.getElementById("login-section").style.display = "none";
+                document.getElementById("btn-logout").style.display = "";
+                document.querySelector(".section-header").style.display =
+                    "none";
+                document.getElementById("endpoint-list").style.display = "none";
+                document.getElementById("settings-container").style.display =
+                    "none";
+                const page = document.getElementById("vuln-page");
+                page.style.display = "";
+                page.innerHTML =
+                    '<div class="empty" style="padding:64px 0;text-align:center">Loading…</div>';
+                vpId = id;
+                try {
+                    const [epRes, histRes] = await Promise.all([
+                        apiFetch(`/v1/endpoints/${id}?sort=${vpSort}`),
+                        apiFetch(`/v1/endpoints/${id}/history?days=30`),
+                    ]);
+                    if (!epRes || !epRes.ok)
+                        throw new Error(
+                            epRes ? `HTTP ${epRes.status}` : "redirected",
+                        );
+                    vpEndpoint = await epRes.json();
+                    vpAllVulns = vpEndpoint.vulnerabilities || [];
+                    vpHistory = histRes.ok
+                        ? (await histRes.json()).days || []
+                        : [];
+                    vpPage = 0;
+                    vpSearch = "";
+                    vpBucket = "";
+                    vpSort = "exposure";
+                    vpOpenRows.clear();
+                    renderVulnPage();
+                } catch (e) {
+                    page.innerHTML = `<div class="error-banner">Could not load endpoint — ${e.message}</div>`;
+                }
+            }
+
+            function buildTimeline(history) {
+                const byDate = {};
+                for (const h of history) byDate[h.date] = h;
+                const days = [];
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date();
+                    d.setUTCDate(d.getUTCDate() - i);
+                    days.push(d.toISOString().slice(0, 10));
+                }
+                const squares = days
+                    .map((date) => {
+                        const [y, m, dd] = date.split("-");
+                        const human = `${dd}/${m}/${y}`;
+                        const h = byDate[date];
+                        if (!h)
+                            return `<div class="tl-day tl-empty" title="${human} — no data"></div>`;
+                        const tip = `${human} — ${h.status}${h.vuln_count ? ", " + h.vuln_count + " vuln" + (h.vuln_count !== 1 ? "s" : "") : ""}`;
+                        return `<div class="tl-day tl-${h.status}" title="${tip}"></div>`;
+                    })
+                    .join("");
+                return `<div class="ep-timeline">
+                    <span class="ep-tl-label">30d</span>
+                    ${squares}
+                    <span class="ep-tl-label">today</span>
+                </div>`;
+            }
+
+            function calcBucketCounts(vulns) {
+                const c = { critical: 0, high: 0, moderate: 0, low: 0 };
+                for (const v of vulns)
+                    if (c[v.exposure_bucket] !== undefined)
+                        c[v.exposure_bucket]++;
+                return c;
+            }
+
+            function buildDonut(counts, total) {
+                const r = 60,
+                    sw = 22,
+                    circ = 2 * Math.PI * r;
+                if (total === 0)
+                    return `<circle r="${r}" cx="80" cy="80" fill="none" stroke="#e5e5e5" stroke-width="${sw}"/>`;
+                const colors = {
+                    critical: "#ef4444",
+                    high: "#f97316",
+                    moderate: "#eab308",
+                    low: "#94a3b8",
+                };
+                let cum = 0;
+                return ["critical", "high", "moderate", "low"]
+                    .map((b) => {
+                        const count = counts[b] || 0;
+                        if (!count) return "";
+                        const arc = (count / total) * circ;
+                        const seg = `<circle r="${r}" cx="80" cy="80" fill="none" stroke="${colors[b]}" stroke-width="${sw}"
+                        stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
+                        stroke-dashoffset="${(circ / 4 - cum).toFixed(2)}"/>`;
+                        cum += arc;
+                        return seg;
+                    })
+                    .join("");
+            }
+
+            // Grayscale donut of scanned projects, segmented by ecosystem.
+            function buildProjectsDonut(entries, total) {
+                const r = 60,
+                    sw = 22,
+                    circ = 2 * Math.PI * r;
+                if (total === 0)
+                    return `<circle r="${r}" cx="80" cy="80" fill="none" stroke="#e5e5e5" stroke-width="${sw}"/>`;
+                let cum = 0;
+                return entries
+                    .map(([eco, count], i) => {
+                        if (!count) return "";
+                        const arc = (count / total) * circ;
+                        const seg = `<circle r="${r}" cx="80" cy="80" fill="none" stroke="${ECO_RAMP[i % ECO_RAMP.length]}" stroke-width="${sw}"
+                        stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
+                        stroke-dashoffset="${(circ / 4 - cum).toFixed(2)}"/>`;
+                        cum += arc;
+                        return seg;
+                    })
+                    .join("");
+            }
+
+            function deltaChip(label, delta) {
+                const sign = delta > 0 ? `+${delta}` : `${delta}`;
+                const cls =
+                    delta > 0
+                        ? "delta-up"
+                        : delta < 0
+                          ? "delta-down"
+                          : "delta-flat";
+                return `<span class="ep-metric"><span class="ep-metric-val ${cls}">${sign}</span> <span class="ep-metric-label">${label}</span></span>`;
+            }
+
+            // Filter vpAllVulns into vpFiltered. Order is set by the backend
+            // (sort param); filtering preserves it.
+            function applyFilter() {
+                const q = vpSearch.trim().toLowerCase();
+                vpFiltered = vpAllVulns.filter((v) => {
+                    if (vpBucket && v.exposure_bucket !== vpBucket)
+                        return false;
+                    if (!q) return true;
+                    if (v.canonical_id.toLowerCase().includes(q)) return true;
+                    return (v.aliases || []).some((a) =>
+                        a.toLowerCase().includes(q),
+                    );
+                });
+            }
+
+            // Re-fetch vulns ordered by the chosen sort, then refresh the list.
+            async function setVulnSort(sort) {
+                vpSort = sort;
+                vpPage = 0;
+                if (!vpId) return;
+                const res = await apiFetch(
+                    `/v1/endpoints/${vpId}?sort=${vpSort}`,
+                );
+                if (res && res.ok) {
+                    const d = await res.json();
+                    vpAllVulns = d.vulnerabilities || [];
+                }
+                updateVulnList();
+            }
+
+            function renderVulnPage() {
+                const ep = vpEndpoint;
+                const counts = calcBucketCounts(vpAllVulns);
+                const total = vpAllVulns.length;
+
+                applyFilter();
+                const totalPages = Math.max(
+                    1,
+                    Math.ceil(vpFiltered.length / VP_PER_PAGE),
+                );
+                vpPage = Math.min(vpPage, totalPages - 1);
+
+                const legendItems = [
+                    { b: "critical", label: "Critical", color: "#ef4444" },
+                    { b: "high", label: "High", color: "#f97316" },
+                    { b: "moderate", label: "Moderate", color: "#eab308" },
+                    { b: "low", label: "Low", color: "#94a3b8" },
+                ]
+                    .filter((x) => counts[x.b] > 0)
+                    .map(
+                        (x) =>
+                            `<div class="ep-legend-item">
+                        <span class="ep-legend-dot" style="background:${x.color}"></span>
+                        <span>${counts[x.b]} ${x.label}</span>
+                    </div>`,
+                    )
+                    .join("");
+
+                // Projects ring data
+                const ecoEntries = Object.entries(
+                    ep.scan_projects_by_ecosystem || {},
+                ).sort((a, b) => b[1] - a[1]);
+                const projTotal =
+                    ecoEntries.reduce((s, [, n]) => s + n, 0) ||
+                    ep.projects_scanned ||
+                    0;
+                const projLegend = ecoEntries
+                    .map(
+                        ([eco, n], i) =>
+                            `<div class="ep-legend-item">
+                        <span class="ep-legend-dot" style="background:${ECO_RAMP[i % ECO_RAMP.length]}"></span>
+                        <span>${n} ${ECO_LABELS[eco] || eco}</span>
+                    </div>`,
+                    )
+                    .join("");
+
+                // Net change in vuln count per window (computed on the backend
+                // from history snapshots).
+                const metricsLegend = `<div class="ep-metrics-legend">
+                    ${deltaChip("last day", ep.change_last_day || 0)}
+                    ${deltaChip("last week", ep.change_last_week || 0)}
+                    ${deltaChip("last 30d", ep.change_last_month || 0)}
+                </div>`;
+
+                document.getElementById("vuln-page").innerHTML = `
+<div class="ep-page">
+    <button class="ep-page-back" onclick="goHome()">← Endpoints</button>
+
+    <div class="ep-header">
+        <div class="ep-donut">
+            <div class="ep-donut-wrap">
+                <svg width="160" height="160" viewBox="0 0 160 160">
+                    ${buildDonut(counts, total)}
+                    <text x="80" y="74" text-anchor="middle" dominant-baseline="middle"
+                          font-size="30" font-weight="700" fill="var(--ink)">${total}</text>
+                    <text x="80" y="95" text-anchor="middle"
+                          font-size="12" fill="var(--mute)">vulns</text>
+                </svg>
+                ${total > 0 ? `<div class="ep-donut-tooltip">${legendItems}</div>` : ""}
+            </div>
+        </div>
+
+        <div class="ep-info-card">
+            <h2>${ep.hostname} ${statusBadge(ep.status, ep.vuln_count)} ${renderTags(ep.tags)}</h2>
+            <div class="ep-kv-grid">
+                <div class="ep-kv"><span class="ep-kv-label">OS</span><span class="ep-kv-value">${ep.os} / ${ep.arch}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">User</span><span class="ep-kv-value">${ep.user || "—"}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">First seen</span><span class="ep-kv-value">${fmtDate(ep.first_seen)}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">Last seen</span><span class="ep-kv-value">${fmtDate(ep.last_seen)}</span></div>
+                ${ep.last_matched_at ? `<div class="ep-kv"><span class="ep-kv-label">Last matched</span><span class="ep-kv-value">${fmtDate(ep.last_matched_at)}</span></div>` : ""}
+            </div>
+            <div class="ep-kv-grid ep-scan-row">
+                ${ep.scan_root ? `<div class="ep-kv"><span class="ep-kv-label">Root</span><span class="ep-kv-value"><code>${ep.scan_root}</code></span></div>` : ""}
+                <div class="ep-kv"><span class="ep-kv-label">Walk</span><span class="ep-kv-value">${fmtMillis(ep.scan_walk_millis)}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">Catalog</span><span class="ep-kv-value">${fmtMillis(ep.scan_catalog_millis)}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">Total</span><span class="ep-kv-value">${fmtMillis(ep.scan_millis)}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">Scan ID</span><span class="ep-kv-value"><code>${ep.last_scan_id ? ep.last_scan_id.slice(0, 8) : "—"}</code></span></div>
+            </div>
+        </div>
+
+        <div class="ep-donut">
+            <div class="ep-donut-wrap">
+                <svg width="160" height="160" viewBox="0 0 160 160">
+                    ${buildProjectsDonut(ecoEntries, projTotal)}
+                    <text x="80" y="74" text-anchor="middle" dominant-baseline="middle"
+                          font-size="30" font-weight="700" fill="var(--ink)">${projTotal}</text>
+                    <text x="80" y="95" text-anchor="middle"
+                          font-size="12" fill="var(--mute)">projects</text>
+                </svg>
+                ${projTotal > 0 && projLegend ? `<div class="ep-donut-tooltip">${projLegend}</div>` : ""}
+            </div>
+        </div>
+    </div>
+
+    ${buildTimeline(vpHistory)}
+    ${metricsLegend}
+
+    <div class="vuln-filter-bar">
+        <div class="vuln-filter-left">
+            <input class="vuln-search-input" type="text" placeholder="Filter by CVE ID, alias…"
+                   value="${vpSearch.replace(/"/g, "&quot;")}"
+                   oninput="vpSearch=this.value;vpPage=0;updateVulnList()"/>
+            <select class="vuln-bucket-select" onchange="vpBucket=this.value;vpPage=0;updateVulnList()">
+                <option value="">All buckets</option>
+                <option value="critical"${vpBucket === "critical" ? " selected" : ""}>Critical</option>
+                <option value="high"${vpBucket === "high" ? " selected" : ""}>High</option>
+                <option value="moderate"${vpBucket === "moderate" ? " selected" : ""}>Moderate</option>
+                <option value="low"${vpBucket === "low" ? " selected" : ""}>Low</option>
+            </select>
+            <select class="vuln-bucket-select" onchange="setVulnSort(this.value)">
+                <option value="exposure"${vpSort === "exposure" ? " selected" : ""}>Sort: Exposure</option>
+                <option value="discovered"${vpSort === "discovered" ? " selected" : ""}>Sort: Discovered</option>
+            </select>
+        </div>
+        <div class="vuln-pagination" id="vp-pagi">${buildPagi(vpFiltered.length, totalPages)}</div>
+    </div>
+
+    <div id="vuln-list-container"></div>
+</div>`;
+                renderVulnList();
+            }
+
+            function buildPagi(filteredLen, totalPages) {
+                return `<span>${filteredLen} result${filteredLen !== 1 ? "s" : ""}</span>
+                    <button class="page-btn" onclick="vpPage--;updateVulnList()" ${vpPage === 0 ? "disabled" : ""}>‹</button>
+                    <span>${vpPage + 1} / ${totalPages}</span>
+                    <button class="page-btn" onclick="vpPage++;updateVulnList()" ${vpPage >= totalPages - 1 ? "disabled" : ""}>›</button>`;
+            }
+
+            function updateVulnList() {
+                applyFilter();
+                const totalPages = Math.max(
+                    1,
+                    Math.ceil(vpFiltered.length / VP_PER_PAGE),
+                );
+                vpPage = Math.min(vpPage, totalPages - 1);
+                const pagi = document.getElementById("vp-pagi");
+                if (pagi)
+                    pagi.innerHTML = buildPagi(vpFiltered.length, totalPages);
+                renderVulnList();
+            }
+
+            function renderVulnList() {
+                const pageVulns = vpFiltered.slice(
+                    vpPage * VP_PER_PAGE,
+                    (vpPage + 1) * VP_PER_PAGE,
+                );
+                const container = document.getElementById(
+                    "vuln-list-container",
+                );
+                if (!container) return;
+                if (!pageVulns.length) {
+                    container.className = "";
+                    container.innerHTML =
+                        '<div class="empty" style="padding:32px 0">No vulnerabilities match the filter.</div>';
+                    return;
+                }
+                container.className = "vuln-list-new";
+                container.innerHTML = pageVulns.map(renderVulnRow).join("");
+            }
+
+            function renderVulnRow(v) {
+                const bucket = v.exposure_bucket || "clean";
+                const score =
+                    v.exposure_score > 0 ? v.exposure_score.toFixed(1) : null;
+                const pkgCount = (v.affected_packages || []).length;
+                const bucketBadge =
+                    bucket !== "clean"
+                        ? `<span class="bucket-badge bucket-${bucket}">${score ? score + " · " : ""}${
+                              bucket
+                          }<span class="es-info-wrap"><span class="es-info-icon">ⓘ</span
+                        ><span class="es-tooltip">Exposure Score — severity × scope weight × kind weight</span
+                        ></span></span>`
+                        : "";
+                const chips = (v.vulns || [])
+                    .map((r) => {
+                        const lbl =
+                            r.id +
+                            (v.severity_score > 0
+                                ? ` (${v.severity_score.toFixed(1)})`
+                                : "");
+                        return r.url
+                            ? `<a class="vuln-ref-chip" href="${r.url}" target="_blank" rel="noopener">${lbl}</a>`
+                            : `<span class="vuln-ref-chip">${lbl}</span>`;
+                    })
+                    .join("");
+                const isOpen = vpOpenRows.has(v.canonical_id);
+                const safeId = v.canonical_id.replace(/[^a-zA-Z0-9]/g, "-");
+                const escapedCid = v.canonical_id
+                    .replace(/&/g, "&amp;")
+                    .replace(/"/g, "&quot;");
+
+                // Right-side chips: exposure (bucketBadge), CVSS, then NEW.
+                const sev =
+                    v.severity_score > 0 ? v.severity_score.toFixed(1) : null;
+                const cvssChip = sev
+                    ? `<span class="vuln-tag">CVSS ${sev}</span>`
+                    : "";
+                const newPill = v.is_new
+                    ? `<span class="vuln-new">NEW</span>`
+                    : "";
+                const dateParts = [];
+                if (v.published_at)
+                    dateParts.push(
+                        `<span><span class="vm-k">Created</span> ${fmtDate(v.published_at)}</span>`,
+                    );
+                if (v.modified_at)
+                    dateParts.push(
+                        `<span><span class="vm-k">Updated</span> ${fmtDate(v.modified_at)}</span>`,
+                    );
+                if (v.discovered_at)
+                    dateParts.push(
+                        `<span><span class="vm-k">Discovered</span> ${fmtDate(v.discovered_at)}</span>`,
+                    );
+                const detailMain = `<div class="vuln-detail-main">
+                        ${chips ? `<div class="vuln-aliases">${chips}</div>` : ""}
+                        ${v.summary ? `<div class="vuln-row-summary">${v.summary}</div>` : ""}
+                    </div>`;
+                const datesCol = dateParts.length
+                    ? `<div class="vuln-dates">${dateParts.join("")}</div>`
+                    : "";
+                const detailTop = `<div class="vuln-detail-top">${detailMain}${datesCol}</div>`;
+
+                const pkgRows = (v.affected_packages || [])
+                    .flatMap((p) =>
+                        (p.dirs?.length ? p.dirs : ["—"]).map(
+                            (d) =>
+                                `<tr><td class="pkg-purl-cell">${p.purl}</td><td>${d}</td><td>${p.kind || "—"}</td><td>${p.scope || "—"}</td><td>${p.discovered_at ? fmtDate(p.discovered_at) : "—"}</td></tr>`,
+                        ),
+                    )
+                    .join("");
+                return `<div class="vuln-row-new${isOpen ? " open" : ""}" id="vrow-${safeId}" data-cid="${escapedCid}">
+                    <div class="vuln-row-header" onclick="toggleVuln(this.closest('[data-cid]').dataset.cid)">
+                        <div class="vuln-row-header-left">
+                            <span class="vuln-cid">${v.canonical_id}</span>
+                        </div>
+                        <div class="vuln-row-header-right">
+                            ${bucketBadge}
+                            ${cvssChip}
+                            ${newPill}
+                            ${pkgCount ? `<span class="vuln-pkg-count">← ${pkgCount} pkg${pkgCount !== 1 ? "s" : ""}</span>` : ""}
+                            <span class="vuln-chevron${isOpen ? " open" : ""}">▶</span>
+                        </div>
+                    </div>
+                    ${detailTop}
+                    <div class="vuln-pkg-area">
+                        ${
+                            pkgRows
+                                ? `<table class="pkg-table">
+                            <thead><tr><th>Package</th><th>Dir</th><th>Kind</th><th>Scope</th><th>Discovered</th></tr></thead>
+                            <tbody>${pkgRows}</tbody>
+                        </table>`
+                                : ""
+                        }
+                    </div>
+                </div>`;
+            }
+
+            function toggleVuln(canonicalId) {
+                const safeId = canonicalId.replace(/[^a-zA-Z0-9]/g, "-");
+                if (vpOpenRows.has(canonicalId)) vpOpenRows.delete(canonicalId);
+                else vpOpenRows.add(canonicalId);
+                const open = vpOpenRows.has(canonicalId);
+                const row = document.getElementById(`vrow-${safeId}`);
+                if (row) {
+                    row.classList.toggle("open", open);
+                    const ch = row.querySelector(".vuln-chevron");
+                    if (ch) ch.classList.toggle("open", open);
+                }
+            }
+
+            // ── settings ──────────────────────────────────────────────────────────────
+
+            async function loadSettings() {
+                try {
+                    const res = await apiFetch("/v1/settings");
+                    if (!res || !res.ok)
+                        throw new Error(
+                            res ? `HTTP ${res.status}` : "redirected",
+                        );
+                    const data = await res.json();
+                    const email = data.notifications?.email || {};
+                    document.getElementById("email-enabled").checked =
+                        email.enabled ?? true;
+                    document.getElementById("email-recipients").value = (
+                        email.recipients || []
+                    ).join("\n");
+                } catch (e) {
+                    setFeedback("Could not load settings: " + e.message, false);
+                }
+            }
+
+            async function saveSettings() {
+                const enabled =
+                    document.getElementById("email-enabled").checked;
+                const raw = document.getElementById("email-recipients").value;
+                const recipients = raw
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                try {
+                    const res = await apiFetch("/v1/settings", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            notifications: { email: { enabled, recipients } },
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        setFeedback(
+                            data.detail || `Error ${res.status}`,
+                            false,
+                        );
+                        return;
+                    }
+                    setFeedback("Saved", true);
+                } catch (e) {
+                    setFeedback("Could not save: " + e.message, false);
+                }
+            }
+
+            function setFeedback(msg, ok) {
+                const el = document.getElementById("settings-feedback");
+                el.textContent = msg;
+                el.className = "settings-feedback " + (ok ? "ok" : "err");
+            }
+
+            // ── init ──────────────────────────────────────────────────────────────────
+
+            // External links — rendered once into the login card and the nav.
+            const BRAND_LINKS = [
+                {
+                    href: "https://github.com/ezequielcamezzana/meerkat",
+                    title: "GitHub",
+                    svg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .1.8 1.6 2.6 1.4.1-.7.4-1.2.7-1.5-2.5-.3-5.1-1.3-5.1-5.6 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-2.9 0 0 .9-.3 3 1.1.9-.2 1.8-.4 2.7-.4.9 0 1.8.1 2.7.4 2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.6.1 2.9.7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.3-5.1 5.6.4.3.8 1 .8 2.1v3.1c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>`,
+                },
+                {
+                    href: "https://github.com/ezequielcamezzana/meerkat/tree/main/docs",
+                    title: "Docs",
+                    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h7a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg>`,
+                },
+                {
+                    href: "https://github.com/ezequielcamezzana/meerkat/releases",
+                    title: "Install",
+                    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+                },
+            ];
+            const brandLinksHTML = BRAND_LINKS.map(
+                (l) =>
+                    `<a class="icon-link" href="${l.href}" target="_blank" rel="noopener" title="${l.title}" aria-label="${l.title}">${l.svg}</a>`,
+            ).join("");
+            document.getElementById("login-links").innerHTML = brandLinksHTML;
+            document.getElementById("nav-icons").innerHTML = brandLinksHTML;
+
+            handleRoute(location.pathname);
+            setInterval(() => {
+                const p = location.pathname;
+                if (p === "/app/login") return; // don't poll the API while logged out
+                if (!p.startsWith("/app/endpoint/") && p !== "/app/settings")
+                    loadEndpoints();
+            }, 30000);
+        </script>
+    </body>
+</html>

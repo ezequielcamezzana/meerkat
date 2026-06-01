@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1.0",
+  "scanner": { "name": "meerkat", "version": "dev" },
+  "endpoint": {
+    "id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+    "hostname": "frontend-01.prod.internal",
+    "os": "linux",
+    "arch": "amd64",
+    "user": "www",
+    "tags": ["prod", "frontend"]
+  },
+  "scan": {
+    "id": "11111111-1111-1111-1111-111111111105",
+    "started_at": "2026-05-27T08:00:00.000000-03:00",
+    "finished_at": "2026-05-27T08:01:09.000000-03:00",
+    "root": "/var/www",
+    "projects_scanned": 4,
+    "cache_hits": 2,
+    "cache_misses": 2
+  },
+  "packages": [
+    {
+      "name": "axios",
+      "version": "0.21.0",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/axios@0.21.0",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/var/www/app", "/var/www/widget"]
+    },
+    {
+      "name": "lodash",
+      "version": "4.17.11",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/lodash@4.17.11",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/var/www/app"]
+    },
+    {
+      "name": "minimist",
+      "version": "1.2.5",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/minimist@1.2.5",
+      "scope": "runtime",
+      "direct": false,
+      "kind": "global-package",
+      "dirs": ["/var/www/app", "/var/www/legacy"]
+    },
+    {
+      "name": "express",
+      "version": "4.17.1",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/express@4.17.1",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/var/www/app"]
+    },
+    {
+      "name": "react",
+      "version": "17.0.2",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/react@17.0.2",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/var/www/app", "/var/www/widget"]
+    },
+    {
+      "name": "node-tar",
+      "version": "1.0.2",
+      "ecosystem": "npm",
+      "purl": "pkg:npm/node-tar@1.0.2",
+      "scope": "runtime",
+      "direct": true,
+      "kind": "project-dependency",
+      "dirs": ["/var/www/app", "/var/www/widget"]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+version: 2
+
+project_name: meerkat
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: meerkat
+    main: ./cmd/meerkat
+    binary: meerkat
+    env:
+      - CGO_ENABLED=0 # modernc.org/sqlite + Syft are pure Go — cross-compiles cleanly
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/ezequielcamezzana/meerkat/cmd/meerkat/commands.Version={{ .Version }}
+      - -X github.com/ezequielcamezzana/meerkat/cmd/meerkat/commands.Commit={{ .ShortCommit }}
+      - -X github.com/ezequielcamezzana/meerkat/cmd/meerkat/commands.Date={{ .Date }}
+
+archives:
+  - id: meerkat
+    # No version in the name so `releases/latest/download/meerkat_<os>_<arch>.tar.gz`
+    # is a stable URL the installer can rely on.
+    name_template: "meerkat_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - docs/**/*
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  draft: false
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

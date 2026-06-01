@@ -1,0 +1,31 @@
+# Compiled binary (built at repo root by deploy.sh / go build -o meerkat)
+/meerkat
+*.exe
+
+# GoReleaser output
+/dist/
+
+# Secrets & local environment — NEVER commit
+.env
+.env.*
+!.env.example
+deploy.sh
+
+# Databases
+*.db
+*.db-wal
+*.db-shm
+
+# Local runtime data
+/logs/
+/pending/
+
+# Local AI tooling
+.claude/
+.claude-flow/
+ai/
+
+# OS / editor
+.DS_Store
+*.swp
+*~
