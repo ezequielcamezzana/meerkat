@@ -37,6 +37,7 @@ type AffectedPkg struct {
 	Scope        string   `json:"scope"`
 	Kind         string   `json:"kind"`
 	DiscoveredAt string   `json:"discovered_at,omitempty"`
+	FixedVersion string   `json:"fixed_version,omitempty"`
 }
 
 type VulnRef struct {
@@ -178,7 +179,8 @@ func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string) ([]V
 				'dirs',          json(ev.dirs),
 				'scope',         ev.package_scope,
 				'kind',          ev.package_kind,
-				'discovered_at', ev.discovered_at
+				'discovered_at', ev.discovered_at,
+				'fixed_version', ev.fixed_version
 			)) AS packages,
 			MAX(ev.exposure_score) AS exposure_score,
 			MAX(ev.discovered_at)  AS discovered_at

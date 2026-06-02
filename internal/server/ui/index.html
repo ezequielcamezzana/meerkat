@@ -273,6 +273,17 @@
             .ep-page {
                 padding: 32px 0;
             }
+            .ep-page-top {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 24px;
+                gap: 12px;
+            }
+            .ep-report-actions {
+                display: flex;
+                gap: 8px;
+            }
             .ep-page-back {
                 display: inline-flex;
                 align-items: center;
@@ -282,7 +293,6 @@
                 cursor: pointer;
                 padding: 4px 8px;
                 border-radius: 9999px;
-                margin-bottom: 24px;
                 border: none;
                 background: none;
                 text-decoration: none;
@@ -1916,6 +1926,46 @@
                 updateVulnList();
             }
 
+            // Report downloads. audit → JSON file; fix → Markdown copied to clipboard.
+            async function downloadReport(kind) {
+                if (!vpId) return;
+                const res = await apiFetch(
+                    `/v1/endpoints/${vpId}/report?kind=${kind}`,
+                );
+                if (!res || !res.ok) return;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `meerkat-${kind}.${kind === "fix" ? "md" : "json"}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+
+            async function copyReport(kind) {
+                if (!vpId) return;
+                const res = await apiFetch(
+                    `/v1/endpoints/${vpId}/report?kind=${kind}`,
+                );
+                if (!res || !res.ok) return;
+                const text = await res.text();
+                try {
+                    await navigator.clipboard.writeText(text);
+                    const btn = document.getElementById("btn-copy-fix");
+                    if (btn) {
+                        const prev = btn.textContent;
+                        btn.textContent = "✓ Copied";
+                        setTimeout(() => {
+                            btn.textContent = prev;
+                        }, 1500);
+                    }
+                } catch (e) {
+                    downloadReport(kind); // clipboard blocked → fall back to a download
+                }
+            }
+
             function renderVulnPage() {
                 const ep = vpEndpoint;
                 const counts = calcBucketCounts(vpAllVulns);
@@ -1972,7 +2022,13 @@
 
                 document.getElementById("vuln-page").innerHTML = `
 <div class="ep-page">
-    <button class="ep-page-back" onclick="goHome()">← Endpoints</button>
+    <div class="ep-page-top">
+        <button class="ep-page-back" onclick="goHome()">← Endpoints</button>
+        <div class="ep-report-actions">
+            <button class="btn" onclick="downloadReport('audit')">↓ Audit (JSON)</button>
+            <button class="btn" id="btn-copy-fix" onclick="copyReport('fix')">⧉ Copy fix</button>
+        </div>
+    </div>
 
     <div class="ep-header">
         <div class="ep-donut">

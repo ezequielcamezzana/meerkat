@@ -118,8 +118,8 @@ func (s *DB) ReplaceEndpointVulnerabilities(ctx context.Context, endpointID stri
 		_, err := s.conn.ExecContext(ctx, `
 			INSERT INTO endpoint_vulnerabilities
 				(endpoint_id, purl, vulnerability_id, package_name, package_version, package_ecosystem, dirs,
-				 exposure_score, package_scope, package_kind, discovered_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 exposure_score, package_scope, package_kind, discovered_at, fixed_version)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(endpoint_id, purl, vulnerability_id) DO UPDATE SET
 				package_name      = excluded.package_name,
 				package_version   = excluded.package_version,
@@ -128,13 +128,14 @@ func (s *DB) ReplaceEndpointVulnerabilities(ctx context.Context, endpointID stri
 				exposure_score    = excluded.exposure_score,
 				package_scope     = excluded.package_scope,
 				package_kind      = excluded.package_kind,
+				fixed_version     = excluded.fixed_version,
 				discovered_at     = CASE
 					WHEN endpoint_vulnerabilities.discovered_at = ''
 					THEN excluded.discovered_at
 					ELSE endpoint_vulnerabilities.discovered_at END`,
 			endpointID, m.Purl, m.Vulnerability.ID,
 			m.PackageName, m.PackageVersion, m.PackageEcosystem, string(dirs),
-			m.ExposureScore, m.PackageScope, m.PackageKind, nowStr,
+			m.ExposureScore, m.PackageScope, m.PackageKind, nowStr, m.FixedVersion,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting endpoint vuln: %w", err)

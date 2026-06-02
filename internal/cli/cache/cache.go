@@ -40,9 +40,20 @@ func (c *Cache) entryPath(key string) string {
 
 // Key computes a content-addressed cache key from the project's lock file contents
 // plus scanner identity. Two projects with identical lock files share one cache entry.
+//
+// WHY: the key hashes every lock file under p.Dir, not just p.LockFiles. The scanner
+// scans the whole p.Dir tree (syft.GetSource), so a nested lock file (e.g.
+// editors/vscode/package-lock.json under an otherwise-empty root project) is part of
+// the scan input. Hashing only the declared lock file pins a stale entry when a
+// nested lock changes — the key input must equal the scan input.
 func (c *Cache) Key(p walker.Project, scannerName, scannerVersion, schemaVersion string) (string, error) {
+	lockFiles, err := lockFilesUnder(p.Dir)
+	if err != nil {
+		return "", err
+	}
+
 	var fileHashes []string
-	for _, lf := range p.LockFiles {
+	for _, lf := range lockFiles {
 		data, err := os.ReadFile(lf)
 		if err != nil {
 			return "", fmt.Errorf("reading lock file %s: %w", lf, err)
@@ -60,6 +71,31 @@ func (c *Cache) Key(p walker.Project, scannerName, scannerVersion, schemaVersion
 
 	final := sha256.Sum256([]byte(combined))
 	return hex.EncodeToString(final[:]), nil
+}
+
+// lockFilesUnder returns every recognized lock file beneath dir, skipping
+// node_modules (its contents derive from the lock files we already hash).
+func lockFilesUnder(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if _, ok := walker.LockFileInfo(d.Name()); ok {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walking %s for lock files: %w", dir, err)
+	}
+	return files, nil
 }
 
 func (c *Cache) Get(key string) ([]api.Package, bool) {
