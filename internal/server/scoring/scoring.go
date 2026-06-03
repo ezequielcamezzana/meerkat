@@ -33,7 +33,24 @@ func Bucket(score float64) string {
 	case score >= 4.0:
 		return "high"
 	case score >= 2.0:
-		return "moderate"
+		return "medium"
+	case score > 0:
+		return "low"
+	default:
+		return "clean"
+	}
+}
+
+// CVSSBucket maps a CVSS v3 base score to a severity bucket. Unlike Bucket,
+// which works on the exposure scale, this uses the standard CVSS thresholds.
+func CVSSBucket(score float64) string {
+	switch {
+	case score >= 9.0:
+		return "critical"
+	case score >= 7.0:
+		return "high"
+	case score >= 4.0:
+		return "medium"
 	case score > 0:
 		return "low"
 	default:

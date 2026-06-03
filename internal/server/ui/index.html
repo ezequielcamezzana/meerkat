@@ -13,6 +13,19 @@
                 margin: 0;
                 padding: 0;
             }
+            /* Form elements don't inherit font by default — force the body font
+               (ui-sans) so buttons/selects/inputs don't fall back to Arial. */
+            button,
+            input,
+            select,
+            textarea {
+                font-family: inherit;
+            }
+            /* Keyboard focus — neutral grey, no brand color (per design system). */
+            :focus-visible {
+                outline: 2px solid var(--charcoal);
+                outline-offset: 1px;
+            }
 
             :root {
                 --primary: #000000;
@@ -28,7 +41,24 @@
                 --hairline-strong: #d4d4d4;
                 --on-dark: #ffffff;
                 --on-dark-mute: rgba(255, 255, 255, 0.7);
-                --focus-ring: rgba(59, 130, 246, 0.5);
+
+                /* Shape: pills for interactive, 12px cards, 6px tooltips. */
+                --radius-full: 9999px;
+                --radius-lg: 12px;
+                --radius-sm: 6px;
+
+                /* Severity palette — soft tint (bg) + matching ink (fg). */
+                --color-severity-critical: #fee2e2;
+                --color-severity-critical-ink: #991b1b;
+                --color-severity-high: #ffedd5;
+                --color-severity-high-ink: #9a3412;
+                --color-severity-medium: #fef9c3;
+                --color-severity-medium-ink: #854d0e;
+                --color-severity-low: #fafafa;
+                --color-severity-low-ink: #525252;
+                --color-severity-none: #fafafa;
+                --color-severity-none-ink: #a3a3a3;
+
             }
 
             body {
@@ -41,12 +71,18 @@
                 line-height: 1.5;
                 color: var(--ink);
                 background: var(--canvas);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
             }
 
             /* Nav */
             nav {
                 height: 56px;
-                border-bottom: 1px solid var(--hairline);
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                background: var(--canvas);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -60,29 +96,29 @@
                 color: var(--ink);
                 text-decoration: none;
             }
+            nav .nav-left {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+            }
             nav .nav-right {
                 display: flex;
                 align-items: center;
                 gap: 14px;
             }
-            .nav-sep {
-                width: 1px;
-                height: 20px;
-                background: var(--hairline);
-            }
-            .badge-stale {
-                color: var(--mute);
-                font-size: 12px;
-            }
             .nav-link {
                 font-size: 14px;
                 color: var(--charcoal);
                 text-decoration: none;
-                padding: 4px 8px;
-                border-radius: 9999px;
+                padding: 4px 0;
             }
             .nav-link:hover {
-                background: var(--surface-soft);
+                color: var(--ink);
+            }
+            .nav-link.active {
+                color: var(--ink);
+                text-decoration: underline;
+                text-underline-offset: 4px;
             }
 
             /* Settings page */
@@ -90,7 +126,18 @@
                 max-width: 480px;
             }
             .settings-panel h1 {
-                margin-bottom: 32px;
+                margin-bottom: 4px;
+            }
+            .settings-sub {
+                font-size: 14px;
+                color: var(--mute);
+                margin-bottom: 24px;
+            }
+            .settings-card {
+                background: var(--canvas);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-lg);
+                padding: 24px;
             }
             .settings-field {
                 margin-bottom: 24px;
@@ -109,7 +156,7 @@
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-size: 13px;
                 border: 1px solid var(--hairline-strong);
-                border-radius: 8px;
+                border-radius: var(--radius-lg);
                 background: var(--canvas);
                 color: var(--ink);
                 resize: vertical;
@@ -140,17 +187,19 @@
                 min-height: 20px;
             }
             .settings-feedback.ok {
-                color: #16a34a;
+                color: var(--ink);
             }
             .settings-feedback.err {
-                color: #dc2626;
+                color: var(--charcoal);
             }
 
             /* Layout */
             main {
+                width: 100%;
                 max-width: 1200px;
                 margin: 0 auto;
                 padding: 48px 32px 88px;
+                flex: 1 0 auto;
             }
 
             h1 {
@@ -185,7 +234,7 @@
                 color: var(--charcoal);
                 border: 1px solid var(--hairline);
             }
-            .badge-moderate {
+            .badge-medium {
                 background: #fef9c3;
                 color: #854d0e;
                 border: 1px solid #fde047;
@@ -222,7 +271,7 @@
             .dot-low {
                 background: #94a3b8;
             }
-            .dot-moderate {
+            .dot-medium {
                 background: #eab308;
             }
             .dot-high {
@@ -257,7 +306,7 @@
                 background: #ffedd5;
                 color: #9a3412;
             }
-            .bucket-moderate {
+            .bucket-medium {
                 background: #fef9c3;
                 color: #854d0e;
             }
@@ -276,29 +325,13 @@
             .ep-page-top {
                 display: flex;
                 align-items: center;
-                justify-content: space-between;
+                justify-content: flex-end;
                 margin-bottom: 24px;
                 gap: 12px;
             }
             .ep-report-actions {
                 display: flex;
                 gap: 8px;
-            }
-            .ep-page-back {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 14px;
-                color: var(--charcoal);
-                cursor: pointer;
-                padding: 4px 8px;
-                border-radius: 9999px;
-                border: none;
-                background: none;
-                text-decoration: none;
-            }
-            .ep-page-back:hover {
-                background: var(--surface-soft);
             }
             .ep-header {
                 display: grid;
@@ -326,7 +359,7 @@
                 transform: translateX(-50%);
                 background: var(--surface-dark);
                 color: var(--on-dark);
-                border-radius: 8px;
+                border-radius: var(--radius-sm);
                 padding: 8px 14px;
                 font-size: 11px;
                 white-space: nowrap;
@@ -387,7 +420,7 @@
                 transform: translateX(-50%);
                 background: var(--surface-dark);
                 color: var(--on-dark);
-                border-radius: 6px;
+                border-radius: var(--radius-sm);
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 400;
@@ -481,7 +514,7 @@
             .tl-low {
                 background: #cbd5e1;
             }
-            .tl-moderate {
+            .tl-medium {
                 background: #fde047;
             }
             .tl-high,
@@ -559,8 +592,8 @@
                 font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 0.04em;
-                color: #ffffff;
-                background: #ea580c;
+                color: var(--on-primary);
+                background: var(--ink);
                 border-radius: 9999px;
                 padding: 1px 7px;
                 white-space: nowrap;
@@ -687,9 +720,10 @@
             }
             .vuln-cid {
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-                font-size: 13px;
+                font-size: 18px;
                 font-weight: 600;
                 color: var(--ink);
+                letter-spacing: -0.01em;
                 white-space: nowrap;
             }
             .vuln-alias-chip {
@@ -697,7 +731,7 @@
                 font-size: 11px;
                 padding: 1px 6px;
                 border: 1px solid var(--hairline);
-                border-radius: 6px;
+                border-radius: var(--radius-full);
                 color: var(--charcoal);
                 white-space: nowrap;
             }
@@ -878,7 +912,7 @@
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-size: 11px;
                 padding: 2px 8px;
-                border-radius: 6px;
+                border-radius: var(--radius-full);
                 border: 1px solid var(--hairline);
                 background: var(--surface-soft);
                 color: var(--charcoal);
@@ -908,7 +942,7 @@
                 font-size: 11px;
                 background: var(--surface-soft);
                 border: 1px solid var(--hairline);
-                border-radius: 6px;
+                border-radius: var(--radius-full);
                 padding: 4px 8px;
                 color: var(--charcoal);
                 display: inline-flex;
@@ -963,6 +997,11 @@
             }
             .btn:hover {
                 border-color: var(--ink);
+            }
+            .btn svg {
+                width: 15px;
+                height: 15px;
+                flex-shrink: 0;
             }
             .btn-primary {
                 background: var(--primary);
@@ -1046,7 +1085,7 @@
                 gap: 6px;
             }
             .panel-cell {
-                border-radius: 10px;
+                border-radius: var(--radius-lg);
                 padding: 0;
                 cursor: pointer;
                 aspect-ratio: 1;
@@ -1065,28 +1104,28 @@
             }
 
             .panel-clean {
-                background: #16a34a;
-                color: #ffffff;
+                background: #dcfce7;
+                color: #166534;
             }
             .panel-low {
-                background: #64748b;
-                color: #ffffff;
+                background: var(--color-severity-low);
+                color: var(--color-severity-low-ink);
             }
-            .panel-moderate {
-                background: #ca8a04;
-                color: #ffffff;
+            .panel-medium {
+                background: var(--color-severity-medium);
+                color: var(--color-severity-medium-ink);
             }
             .panel-high {
-                background: #ea580c;
-                color: #ffffff;
+                background: var(--color-severity-high);
+                color: var(--color-severity-high-ink);
             }
             .panel-critical {
-                background: #dc2626;
-                color: #ffffff;
+                background: var(--color-severity-critical);
+                color: var(--color-severity-critical-ink);
             }
             .panel-vulnerable {
-                background: #dc2626;
-                color: #ffffff;
+                background: var(--color-severity-critical);
+                color: var(--color-severity-critical-ink);
             }
             .panel-stale {
                 background: var(--surface-soft);
@@ -1112,7 +1151,7 @@
                 font-size: 11px;
                 line-height: 1.5;
                 padding: 6px 10px;
-                border-radius: 8px;
+                border-radius: var(--radius-sm);
                 white-space: pre;
                 pointer-events: none;
                 opacity: 0;
@@ -1179,11 +1218,20 @@
                 padding-top: 20px;
                 border-top: 1px solid var(--hairline);
             }
-            .nav-icons {
+            /* Footer — quiet home for GitHub/Docs/Install links. */
+            .footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 20px 32px;
+                font-size: 13px;
+                color: var(--body);
+            }
+            .footer-links {
                 display: inline-flex;
                 align-items: center;
-                gap: 14px;
-                margin-right: 4px;
+                gap: 16px;
             }
             .login-brand img {
                 height: 36px;
@@ -1219,11 +1267,11 @@
             }
             .login-field input {
                 width: 100%;
-                padding: 8px 12px;
+                padding: 8px 14px;
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-size: 13px;
                 border: 1px solid var(--hairline-strong);
-                border-radius: 8px;
+                border-radius: var(--radius-full);
                 background: var(--canvas);
                 color: var(--ink);
             }
@@ -1233,7 +1281,7 @@
             }
             .login-error {
                 font-size: 13px;
-                color: #dc2626;
+                color: var(--charcoal);
                 min-height: 20px;
                 margin-bottom: 12px;
             }
@@ -1241,33 +1289,49 @@
     </head>
     <body>
         <nav>
-            <span class="brand">
-                <img
-                    src="/app/assets/meerkat-icon.png"
-                    alt=""
-                    style="
-                        height: 45px;
-                        width: 45px;
-                        object-fit: contain;
-                        vertical-align: middle;
-                        margin-right: 6px;
-                    "
-                />meerkat
-            </span>
-            <div class="nav-right">
-                <span class="nav-icons" id="nav-icons"></span>
-                <span class="nav-sep" aria-hidden="true"></span>
-                <span id="last-refresh" class="badge-stale"></span>
-                <button class="btn" onclick="goHome()">↻ Refresh</button>
+            <div class="nav-left">
+                <span class="brand">
+                    <img
+                        src="/app/assets/meerkat-icon.png"
+                        alt=""
+                        style="
+                            height: 45px;
+                            width: 45px;
+                            object-fit: contain;
+                            vertical-align: middle;
+                            margin-right: 6px;
+                        "
+                    />meerkat
+                </span>
                 <a
-                    class="btn"
+                    class="nav-link"
+                    href="/app"
+                    data-route="/app"
+                    onclick="
+                        navigateTo('/app');
+                        return false;
+                    "
+                    >Endpoints</a
+                >
+                <a
+                    class="nav-link"
                     href="/app/settings"
+                    data-route="/app/settings"
                     onclick="
                         navigateTo('/app/settings');
                         return false;
                     "
                     >Settings</a
                 >
+            </div>
+            <div class="nav-right">
+                <button class="btn" onclick="goHome()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <polyline points="21 3 21 9 15 9" />
+                    </svg>
+                    Refresh
+                </button>
                 <button
                     class="btn btn-primary"
                     id="btn-logout"
@@ -1350,27 +1414,42 @@
             <div id="settings-container" style="display: none">
                 <div class="settings-panel">
                     <h1>Settings</h1>
-                    <div class="settings-field">
-                        <label class="settings-toggle">
-                            <input type="checkbox" id="email-enabled" />
-                            Email notifications
-                        </label>
-                    </div>
-                    <div class="settings-field">
-                        <label for="email-recipients">Recipients</label>
-                        <textarea
-                            id="email-recipients"
-                            placeholder="one@example.com&#10;two@example.com"
-                        ></textarea>
-                        <div class="settings-hint">
-                            One email address per line.
+                    <p class="settings-sub">
+                        Email alerts for newly discovered vulnerabilities.
+                    </p>
+                    <div class="settings-card">
+                        <div class="settings-field">
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="email-enabled" />
+                                Email notifications
+                            </label>
                         </div>
+                        <div class="settings-field">
+                            <label for="email-recipients">Recipients</label>
+                            <textarea
+                                id="email-recipients"
+                                placeholder="one@example.com&#10;two@example.com"
+                            ></textarea>
+                            <div class="settings-hint">
+                                One email address per line.
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettings()">
+                            Save
+                        </button>
+                        <div
+                            id="settings-feedback"
+                            class="settings-feedback"
+                        ></div>
                     </div>
-                    <button class="btn" onclick="saveSettings()">Save</button>
-                    <div id="settings-feedback" class="settings-feedback"></div>
                 </div>
             </div>
         </main>
+
+        <footer class="footer" id="app-footer">
+            <span class="footer-meta" id="footer-meta"></span>
+            <span class="footer-links" id="footer-links"></span>
+        </footer>
 
         <script>
             let selectedID = null;
@@ -1400,10 +1479,17 @@
 
             // ── helpers ───────────────────────────────────────────────────────────────
 
-            function statusBadge(status, vulnCount) {
-                const buckets = ["critical", "high", "moderate", "low"];
-                if (buckets.includes(status))
-                    return `<span class="badge badge-${status}"><span class="dot dot-${status}"></span>${vulnCount} vuln${vulnCount !== 1 ? "s" : ""}</span>`;
+            function statusBadge(status, vulnCount, worstBucket) {
+                const buckets = ["critical", "high", "medium", "low"];
+                // When we know the worst severity (detail page), color the pill by
+                // it even if the endpoint is stale/generic-vulnerable.
+                const sev = buckets.includes(worstBucket)
+                    ? worstBucket
+                    : buckets.includes(status)
+                      ? status
+                      : null;
+                if (sev)
+                    return `<span class="badge badge-${sev}"><span class="dot dot-${sev}"></span>${vulnCount} vuln${vulnCount !== 1 ? "s" : ""}</span>`;
                 if (status === "vulnerable")
                     return `<span class="badge badge-vulnerable"><span class="dot dot-vuln"></span>${vulnCount} vuln${vulnCount !== 1 ? "s" : ""}</span>`;
                 if (status === "stale")
@@ -1495,8 +1581,6 @@
                     allEndpoints = data.endpoints || [];
                     totalCount = data.total || 0;
                     document.getElementById("error-container").innerHTML = "";
-                    document.getElementById("last-refresh").textContent =
-                        "Updated " + relativeTime(new Date().toISOString());
                     render();
                 } catch (e) {
                     document.getElementById("error-container").innerHTML =
@@ -1591,7 +1675,7 @@
 
                 el.innerHTML = endpoints
                     .map((ep) => {
-                        const buckets = ["critical", "high", "moderate", "low"];
+                        const buckets = ["critical", "high", "medium", "low"];
                         const statusClass = buckets.includes(ep.status)
                             ? `panel-${ep.status}`
                             : ep.status === "vulnerable"
@@ -1603,7 +1687,7 @@
                         const showCount = [
                             "critical",
                             "high",
-                            "moderate",
+                            "medium",
                             "low",
                             "vulnerable",
                         ].includes(ep.status);
@@ -1641,6 +1725,7 @@
             function showMain() {
                 document.getElementById("login-section").style.display = "none";
                 document.getElementById("btn-logout").style.display = "";
+                document.getElementById("app-footer").style.display = "";
                 document.querySelector(".section-header").style.display = "";
                 document.getElementById("endpoint-list").style.display = "";
                 document.getElementById("vuln-page").style.display = "none";
@@ -1651,6 +1736,7 @@
             function showSettings() {
                 document.getElementById("login-section").style.display = "none";
                 document.getElementById("btn-logout").style.display = "";
+                document.getElementById("app-footer").style.display = "";
                 document.querySelector(".section-header").style.display =
                     "none";
                 document.getElementById("endpoint-list").style.display = "none";
@@ -1666,6 +1752,7 @@
 
             function showLogin() {
                 document.getElementById("login-section").style.display = "";
+                document.getElementById("app-footer").style.display = "none";
                 document.querySelector(".section-header").style.display =
                     "none";
                 document.getElementById("endpoint-list").style.display = "none";
@@ -1726,6 +1813,16 @@
                 // The nav is app chrome — hide it on the login gate.
                 document.querySelector("nav").style.display =
                     rel === "/login" ? "none" : "flex";
+                // Highlight the active section: Settings, else Endpoints.
+                const activeRoute = rel.startsWith("/settings")
+                    ? "/app/settings"
+                    : "/app";
+                document.querySelectorAll("nav .nav-link").forEach((a) => {
+                    a.classList.toggle(
+                        "active",
+                        a.dataset.route === activeRoute,
+                    );
+                });
                 if (rel === "/login") {
                     showLogin();
                 } else if (rel === "/settings") {
@@ -1767,6 +1864,7 @@
             async function loadVulnPage(id) {
                 document.getElementById("login-section").style.display = "none";
                 document.getElementById("btn-logout").style.display = "";
+                document.getElementById("app-footer").style.display = "";
                 document.querySelector(".section-header").style.display =
                     "none";
                 document.getElementById("endpoint-list").style.display = "none";
@@ -1830,7 +1928,7 @@
             }
 
             function calcBucketCounts(vulns) {
-                const c = { critical: 0, high: 0, moderate: 0, low: 0 };
+                const c = { critical: 0, high: 0, medium: 0, low: 0 };
                 for (const v of vulns)
                     if (c[v.exposure_bucket] !== undefined)
                         c[v.exposure_bucket]++;
@@ -1846,11 +1944,11 @@
                 const colors = {
                     critical: "#ef4444",
                     high: "#f97316",
-                    moderate: "#eab308",
+                    medium: "#eab308",
                     low: "#94a3b8",
                 };
                 let cum = 0;
-                return ["critical", "high", "moderate", "low"]
+                return ["critical", "high", "medium", "low"]
                     .map((b) => {
                         const count = counts[b] || 0;
                         if (!count) return "";
@@ -1953,12 +2051,14 @@
                 const text = await res.text();
                 try {
                     await navigator.clipboard.writeText(text);
-                    const btn = document.getElementById("btn-copy-fix");
-                    if (btn) {
-                        const prev = btn.textContent;
-                        btn.textContent = "✓ Copied";
+                    const label = document.querySelector(
+                        "#btn-copy-fix .btn-label",
+                    );
+                    if (label) {
+                        const prev = label.textContent;
+                        label.textContent = "Copied";
                         setTimeout(() => {
-                            btn.textContent = prev;
+                            label.textContent = prev;
                         }, 1500);
                     }
                 } catch (e) {
@@ -1981,7 +2081,7 @@
                 const legendItems = [
                     { b: "critical", label: "Critical", color: "#ef4444" },
                     { b: "high", label: "High", color: "#f97316" },
-                    { b: "moderate", label: "Moderate", color: "#eab308" },
+                    { b: "medium", label: "Medium", color: "#eab308" },
                     { b: "low", label: "Low", color: "#94a3b8" },
                 ]
                     .filter((x) => counts[x.b] > 0)
@@ -2023,17 +2123,29 @@
                 document.getElementById("vuln-page").innerHTML = `
 <div class="ep-page">
     <div class="ep-page-top">
-        <button class="ep-page-back" onclick="goHome()">← Endpoints</button>
         <div class="ep-report-actions">
-            <button class="btn" onclick="downloadReport('audit')">↓ Audit (JSON)</button>
-            <button class="btn" id="btn-copy-fix" onclick="copyReport('fix')">⧉ Copy fix</button>
+            <button class="btn" onclick="downloadReport('audit')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Audit (JSON)
+            </button>
+            <button class="btn" id="btn-copy-fix" onclick="copyReport('fix')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span class="btn-label">Copy fix</span>
+            </button>
         </div>
     </div>
 
     <div class="ep-header">
         <div class="ep-donut">
             <div class="ep-donut-wrap">
-                <svg width="160" height="160" viewBox="0 0 160 160">
+                <svg width="180" height="180" viewBox="0 0 160 160">
                     ${buildDonut(counts, total)}
                     <text x="80" y="74" text-anchor="middle" dominant-baseline="middle"
                           font-size="30" font-weight="700" fill="var(--ink)">${total}</text>
@@ -2045,7 +2157,7 @@
         </div>
 
         <div class="ep-info-card">
-            <h2>${ep.hostname} ${statusBadge(ep.status, ep.vuln_count)} ${renderTags(ep.tags)}</h2>
+            <h2>${ep.hostname} ${statusBadge(ep.status, ep.vuln_count, ["critical", "high", "medium", "low"].find((b) => counts[b] > 0))} ${renderTags(ep.tags)}</h2>
             <div class="ep-kv-grid">
                 <div class="ep-kv"><span class="ep-kv-label">OS</span><span class="ep-kv-value">${ep.os} / ${ep.arch}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">User</span><span class="ep-kv-value">${ep.user || "—"}</span></div>
@@ -2064,7 +2176,7 @@
 
         <div class="ep-donut">
             <div class="ep-donut-wrap">
-                <svg width="160" height="160" viewBox="0 0 160 160">
+                <svg width="180" height="180" viewBox="0 0 160 160">
                     ${buildProjectsDonut(ecoEntries, projTotal)}
                     <text x="80" y="74" text-anchor="middle" dominant-baseline="middle"
                           font-size="30" font-weight="700" fill="var(--ink)">${projTotal}</text>
@@ -2088,7 +2200,7 @@
                 <option value="">All buckets</option>
                 <option value="critical"${vpBucket === "critical" ? " selected" : ""}>Critical</option>
                 <option value="high"${vpBucket === "high" ? " selected" : ""}>High</option>
-                <option value="moderate"${vpBucket === "moderate" ? " selected" : ""}>Moderate</option>
+                <option value="medium"${vpBucket === "medium" ? " selected" : ""}>Medium</option>
                 <option value="low"${vpBucket === "low" ? " selected" : ""}>Low</option>
             </select>
             <select class="vuln-bucket-select" onchange="setVulnSort(this.value)">
@@ -2150,9 +2262,7 @@
                 const pkgCount = (v.affected_packages || []).length;
                 const bucketBadge =
                     bucket !== "clean"
-                        ? `<span class="bucket-badge bucket-${bucket}">${score ? score + " · " : ""}${
-                              bucket
-                          }<span class="es-info-wrap"><span class="es-info-icon">ⓘ</span
+                        ? `<span class="bucket-badge bucket-${bucket}">ExS · ${score} · ${bucket}<span class="es-info-wrap"><span class="es-info-icon">ⓘ</span
                         ><span class="es-tooltip">Exposure Score — severity × scope weight × kind weight</span
                         ></span></span>`
                         : "";
@@ -2178,7 +2288,7 @@
                 const sev =
                     v.severity_score > 0 ? v.severity_score.toFixed(1) : null;
                 const cvssChip = sev
-                    ? `<span class="vuln-tag">CVSS ${sev}</span>`
+                    ? `<span class="bucket-badge bucket-${v.cvss_bucket}">CVSS · ${sev} · ${v.cvss_bucket}</span>`
                     : "";
                 const newPill = v.is_new
                     ? `<span class="vuln-new">NEW</span>`
@@ -2222,7 +2332,7 @@
                             ${bucketBadge}
                             ${cvssChip}
                             ${newPill}
-                            ${pkgCount ? `<span class="vuln-pkg-count">← ${pkgCount} pkg${pkgCount !== 1 ? "s" : ""}</span>` : ""}
+                            ${pkgCount ? `<span class="vuln-pkg-count">${pkgCount} pkg${pkgCount !== 1 ? "s" : ""}</span>` : ""}
                             <span class="vuln-chevron${isOpen ? " open" : ""}">▶</span>
                         </div>
                     </div>
@@ -2335,7 +2445,11 @@
                     `<a class="icon-link" href="${l.href}" target="_blank" rel="noopener" title="${l.title}" aria-label="${l.title}">${l.svg}</a>`,
             ).join("");
             document.getElementById("login-links").innerHTML = brandLinksHTML;
-            document.getElementById("nav-icons").innerHTML = brandLinksHTML;
+            document.getElementById("footer-links").innerHTML = brandLinksHTML;
+
+            const MEERKAT_VERSION = "dev";
+            document.getElementById("footer-meta").textContent =
+                `meerkat · ${MEERKAT_VERSION} · ${new Date().getFullYear()}`;
 
             handleRoute(location.pathname);
             setInterval(() => {

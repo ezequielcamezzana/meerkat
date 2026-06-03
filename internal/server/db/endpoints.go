@@ -70,7 +70,7 @@ func (s *DB) ListEndpoints(ctx context.Context, f EndpointFilter) ([]EndpointWit
 				WHEN datetime(e.last_seen) < datetime('now', '-24 hours') THEN 'stale'
 				WHEN COALESCE(ev.max_exposure, 0) >= 7.0 THEN 'critical'
 				WHEN COALESCE(ev.max_exposure, 0) >= 4.0 THEN 'high'
-				WHEN COALESCE(ev.max_exposure, 0) >= 2.0 THEN 'moderate'
+				WHEN COALESCE(ev.max_exposure, 0) >= 2.0 THEN 'medium'
 				WHEN COALESCE(ev.max_exposure, 0) > 0    THEN 'low'
 				ELSE 'clean'
 			END AS status,
@@ -124,7 +124,7 @@ func (s *DB) GetEndpointRow(ctx context.Context, id, tenantID string) (*Endpoint
 				WHEN datetime(e.last_seen) < datetime('now', '-24 hours') THEN 'stale'
 				WHEN COALESCE(ev.max_exposure, 0) >= 7.0 THEN 'critical'
 				WHEN COALESCE(ev.max_exposure, 0) >= 4.0 THEN 'high'
-				WHEN COALESCE(ev.max_exposure, 0) >= 2.0 THEN 'moderate'
+				WHEN COALESCE(ev.max_exposure, 0) >= 2.0 THEN 'medium'
 				WHEN COALESCE(ev.max_exposure, 0) > 0    THEN 'low'
 				ELSE 'clean'
 			END AS status,

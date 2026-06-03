@@ -20,6 +20,7 @@ type VulnGrouped struct {
 	ExposureScore    float64       `json:"exposure_score"`
 	ExposureBucket   string        `json:"exposure_bucket"`
 	SeverityScore    float64       `json:"severity_score"`
+	CvssBucket       string        `json:"cvss_bucket"`
 	Source           string        `json:"source"`
 	Scope            string        `json:"scope"`
 	Kind             string        `json:"kind"`
@@ -258,6 +259,7 @@ func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string) ([]V
 			}
 		}
 
+		vg.CvssBucket = scoring.CVSSBucket(vg.SeverityScore)
 		result = append(result, vg)
 	}
 	return result, rows.Err()
