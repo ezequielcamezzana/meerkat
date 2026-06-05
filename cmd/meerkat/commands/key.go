@@ -1,10 +1,16 @@
 package commands
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
+	clicfg "github.com/ezequielcamezzana/meerkat/internal/cli/config"
 	"github.com/ezequielcamezzana/meerkat/internal/server/auth"
 	"github.com/ezequielcamezzana/meerkat/internal/server/db"
 	"github.com/google/uuid"
@@ -18,10 +24,96 @@ func NewKeyCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newKeyCreateCmd(),
+		newKeyGuestCmd(),
 		newKeyListCmd(),
 		newKeyRevokeCmd(),
 	)
 	return cmd
+}
+
+// newKeyGuestCmd mints a read-only (guest) key. Unlike `create`, it talks to the
+// server over HTTP using the complete key already in config, and the server scopes
+// the guest key to that key's tenant — you can't target an arbitrary tenant.
+func newKeyGuestCmd() *cobra.Command {
+	var (
+		keyName     string
+		serverURL   string
+		serverToken string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "guest",
+		Short: "Create a read-only (guest) API key for your tenant",
+		Long: "Creates a read-only key scoped to the tenant of the complete key in\n" +
+			"your config. Requires a configured server URL and (complete) token.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if serverURL == "" || serverToken == "" {
+				cfg, err := clicfg.Load()
+				if err != nil {
+					return fmt.Errorf("loading config: %w", err)
+				}
+				if serverURL == "" {
+					serverURL = cfg.Server.URL
+				}
+				if serverToken == "" {
+					serverToken = cfg.Server.Token
+				}
+			}
+			if serverURL == "" || serverToken == "" {
+				return fmt.Errorf("a server URL and a complete API key are required (run `meerkat config init`)")
+			}
+
+			token, err := requestGuestKey(cmd.Context(), serverURL, serverToken, keyName)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Guest (read-only) key created.\n")
+			fmt.Fprintf(os.Stderr, "Store this key securely — it will not be shown again:\n\n")
+			fmt.Println(token)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&keyName, "name", "", "Human label for this key (default: guest-key)")
+	cmd.Flags().StringVar(&serverURL, "server", "", "Server URL (default: from config)")
+	cmd.Flags().StringVar(&serverToken, "token", "", "Complete API key to authenticate with (default: from config)")
+	return cmd
+}
+
+// requestGuestKey POSTs to the guest-key endpoint and returns the new token.
+func requestGuestKey(ctx context.Context, serverURL, token, name string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"name": name})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/v1/keys/guest", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("reaching server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return "", fmt.Errorf("your API key is not valid")
+	case resp.StatusCode == http.StatusForbidden:
+		return "", fmt.Errorf("your API key is read-only and cannot create guest keys")
+	case resp.StatusCode < 200 || resp.StatusCode >= 300:
+		msg, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("server returned HTTP %d: %s", resp.StatusCode, string(msg))
+	}
+
+	var parsed struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil || parsed.Token == "" {
+		return "", fmt.Errorf("server response missing token")
+	}
+	return parsed.Token, nil
 }
 
 func newKeyCreateCmd() *cobra.Command {
@@ -68,7 +160,7 @@ func newKeyCreateCmd() *cobra.Command {
 				keyName = tenantName + "-key"
 			}
 
-			key, err := database.CreateAPIKey(ctx, uuid.NewString(), tenant.ID, keyName, hash, time.Now().UTC().Format(time.RFC3339))
+			key, err := database.CreateAPIKey(ctx, uuid.NewString(), tenant.ID, keyName, db.RoleComplete, hash, time.Now().UTC().Format(time.RFC3339))
 			if err != nil {
 				return fmt.Errorf("saving key: %w", err)
 			}
@@ -118,11 +210,11 @@ func newKeyListCmd() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("%-36s  %-20s  %-20s  %s\n", "ID", "Tenant", "Name", "Created")
-			fmt.Printf("%-36s  %-20s  %-20s  %s\n", "----", "------", "----", "-------")
+			fmt.Printf("%-36s  %-20s  %-20s  %-9s  %s\n", "ID", "Tenant", "Name", "Role", "Created")
+			fmt.Printf("%-36s  %-20s  %-20s  %-9s  %s\n", "----", "------", "----", "----", "-------")
 			for _, k := range keys {
-				fmt.Printf("%-36s  %-20s  %-20s  %s\n",
-					k.ID, tenantByID[k.TenantID], k.Name, k.CreatedAt)
+				fmt.Printf("%-36s  %-20s  %-20s  %-9s  %s\n",
+					k.ID, tenantByID[k.TenantID], k.Name, k.Role, k.CreatedAt)
 			}
 			return nil
 		},

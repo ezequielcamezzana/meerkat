@@ -106,6 +106,16 @@
                 align-items: center;
                 gap: 14px;
             }
+            .guest-badge {
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                color: var(--mute);
+                border: 1px solid var(--hairline);
+                border-radius: 999px;
+                padding: 3px 10px;
+            }
             .nav-link {
                 font-size: 14px;
                 color: var(--charcoal);
@@ -1315,6 +1325,7 @@
                 >
                 <a
                     class="nav-link"
+                    id="nav-settings"
                     href="/app/settings"
                     data-route="/app/settings"
                     onclick="
@@ -1325,6 +1336,7 @@
                 >
             </div>
             <div class="nav-right">
+                <span id="guest-badge" class="guest-badge" style="display: none">guest · read-only</span>
                 <button class="btn" onclick="goHome()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M21 12a9 9 0 1 1-2.64-6.36" />
@@ -1434,7 +1446,7 @@
                                 One email address per line.
                             </div>
                         </div>
-                        <button class="btn btn-primary" onclick="saveSettings()">
+                        <button class="btn btn-primary" id="btn-save-settings" onclick="saveSettings()">
                             Save
                         </button>
                         <div
@@ -1457,6 +1469,7 @@
             let activeTag = null;
             let allEndpoints = [];
             let totalCount = 0;
+            let isGuest = false; // read-only session — set by loadSession()
 
             // ── view / tag state ─────────────────────────────────────────────────────
 
@@ -1478,6 +1491,18 @@
             }
 
             // ── helpers ───────────────────────────────────────────────────────────────
+
+            // Escapes data-derived strings before they go into innerHTML, so
+            // inventory fields (hostname, purl, summary…) render as text and can't
+            // inject markup. Use on EVERY interpolation of scanner-supplied data.
+            function esc(s) {
+                return String(s ?? "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
 
             function statusBadge(status, vulnCount, worstBucket) {
                 const buckets = ["critical", "high", "medium", "low"];
@@ -1564,11 +1589,34 @@
             function renderTags(tags) {
                 if (!tags || !tags.length) return "";
                 return tags
-                    .map((t) => `<span class="tag">${t}</span>`)
+                    .map((t) => `<span class="tag">${esc(t)}</span>`)
                     .join("");
             }
 
             // ── data loading ──────────────────────────────────────────────────────────
+
+            // Reads the current session's role and toggles guest UI. Write actions
+            // are also blocked server-side (403); this only hides what would fail.
+            async function loadSession() {
+                try {
+                    const res = await apiFetch("/v1/session");
+                    if (!res || !res.ok) return;
+                    const data = await res.json();
+                    isGuest = data.role === "guest";
+                } catch (e) {
+                    isGuest = false;
+                }
+                applyGuestChrome();
+            }
+
+            function applyGuestChrome() {
+                const badge = document.getElementById("guest-badge");
+                if (badge) badge.style.display = isGuest ? "" : "none";
+                const settings = document.getElementById("nav-settings");
+                if (settings) settings.style.display = isGuest ? "none" : "";
+                const saveBtn = document.getElementById("btn-save-settings");
+                if (saveBtn) saveBtn.style.display = isGuest ? "none" : "";
+            }
 
             async function loadEndpoints() {
                 try {
@@ -1603,8 +1651,8 @@
                     .map(
                         (t) => `
       <button class="tag-filter-btn${activeTag === t ? " active" : ""}"
-              onclick="setTag(${t === null ? "null" : `'${t}'`})">
-        ${t === null ? "All" : t}
+              data-tag="${t === null ? "" : esc(t)}" onclick="setTag(this.dataset.tag || null)">
+        ${t === null ? "All" : esc(t)}
       </button>`,
                     )
                     .join("");
@@ -1646,11 +1694,11 @@
                     .map(
                         (ep) => `
       <div class="endpoint-card${ep.id === selectedID ? " active" : ""}"
-           onclick="selectEndpoint('${ep.id}', this)">
+           data-id="${esc(ep.id)}" onclick="selectEndpoint(this.dataset.id)">
         <div class="endpoint-main">
-          <div class="endpoint-hostname">${ep.hostname}</div>
+          <div class="endpoint-hostname">${esc(ep.hostname)}</div>
           <div class="endpoint-meta">
-            <span>${ep.os} / ${ep.arch}</span>
+            <span>${esc(ep.os)} / ${esc(ep.arch)}</span>
             <span>${relativeTime(ep.last_seen)}</span>
             ${renderTags(ep.tags)}
           </div>
@@ -1683,7 +1731,7 @@
                               : ep.status === "stale"
                                 ? "panel-stale"
                                 : "panel-clean";
-                        const tip = `${ep.hostname}\n${ep.os} / ${ep.arch}`;
+                        const tip = `${esc(ep.hostname)}\n${esc(ep.os)} / ${esc(ep.arch)}`;
                         const showCount = [
                             "critical",
                             "high",
@@ -1698,8 +1746,8 @@
                               : `<span class="panel-count">OK</span>`;
                         return `
         <div class="panel-cell ${statusClass}${ep.id === selectedID ? " active" : ""}"
-             data-tip="${tip}"
-             onclick="selectEndpoint('${ep.id}', this)">
+             data-tip="${tip}" data-id="${esc(ep.id)}"
+             onclick="selectEndpoint(this.dataset.id)">
           ${count}
         </div>`;
                     })
@@ -1813,6 +1861,8 @@
                 // The nav is app chrome — hide it on the login gate.
                 document.querySelector("nav").style.display =
                     rel === "/login" ? "none" : "flex";
+                // Refresh session role on any authenticated route (toggles guest UI).
+                if (rel !== "/login") loadSession();
                 // Highlight the active section: Settings, else Endpoints.
                 const activeRoute = rel.startsWith("/settings")
                     ? "/app/settings"
@@ -1851,13 +1901,17 @@
 
             let vpEndpoint = null;
             let vpId = null;
-            let vpAllVulns = [];
             let vpHistory = [];
-            let vpFiltered = [];
+            // The backend owns filtering/sorting/pagination; the FE just renders.
+            let vpPageVulns = []; // current page only
+            let vpBucketCounts = { critical: 0, high: 0, medium: 0, low: 0 };
+            let vpTotal = 0; // full grouped count (donut)
+            let vpFilteredTotal = 0; // count after bucket/search filter (pagination)
             let vpPage = 0;
             let vpSearch = "";
             let vpBucket = "";
             let vpSort = "exposure";
+            let vpSearchTimer = null;
             const VP_PER_PAGE = 20;
             const vpOpenRows = new Set();
 
@@ -1875,9 +1929,13 @@
                 page.innerHTML =
                     '<div class="empty" style="padding:64px 0;text-align:center">Loading…</div>';
                 vpId = id;
+                vpPage = 0;
+                vpSearch = "";
+                vpBucket = "";
+                vpSort = "exposure";
                 try {
                     const [epRes, histRes] = await Promise.all([
-                        apiFetch(`/v1/endpoints/${id}?sort=${vpSort}`),
+                        apiFetch(vulnQueryURL()),
                         apiFetch(`/v1/endpoints/${id}/history?days=30`),
                     ]);
                     if (!epRes || !epRes.ok)
@@ -1885,14 +1943,13 @@
                             epRes ? `HTTP ${epRes.status}` : "redirected",
                         );
                     vpEndpoint = await epRes.json();
-                    vpAllVulns = vpEndpoint.vulnerabilities || [];
+                    vpPageVulns = vpEndpoint.vulnerabilities || [];
+                    vpBucketCounts = vpEndpoint.bucket_counts || vpBucketCounts;
+                    vpTotal = vpEndpoint.vuln_total ?? vpPageVulns.length;
+                    vpFilteredTotal = vpEndpoint.filtered_total ?? vpTotal;
                     vpHistory = histRes.ok
                         ? (await histRes.json()).days || []
                         : [];
-                    vpPage = 0;
-                    vpSearch = "";
-                    vpBucket = "";
-                    vpSort = "exposure";
                     vpOpenRows.clear();
                     renderVulnPage();
                 } catch (e) {
@@ -1925,14 +1982,6 @@
                     ${squares}
                     <span class="ep-tl-label">today</span>
                 </div>`;
-            }
-
-            function calcBucketCounts(vulns) {
-                const c = { critical: 0, high: 0, medium: 0, low: 0 };
-                for (const v of vulns)
-                    if (c[v.exposure_bucket] !== undefined)
-                        c[v.exposure_bucket]++;
-                return c;
             }
 
             function buildDonut(counts, total) {
@@ -1994,33 +2043,34 @@
                 return `<span class="ep-metric"><span class="ep-metric-val ${cls}">${sign}</span> <span class="ep-metric-label">${label}</span></span>`;
             }
 
-            // Filter vpAllVulns into vpFiltered. Order is set by the backend
-            // (sort param); filtering preserves it.
-            function applyFilter() {
-                const q = vpSearch.trim().toLowerCase();
-                vpFiltered = vpAllVulns.filter((v) => {
-                    if (vpBucket && v.exposure_bucket !== vpBucket)
-                        return false;
-                    if (!q) return true;
-                    if (v.canonical_id.toLowerCase().includes(q)) return true;
-                    return (v.aliases || []).some((a) =>
-                        a.toLowerCase().includes(q),
-                    );
-                });
+            // Builds the endpoint URL with the current filter/sort/page state.
+            function vulnQueryURL() {
+                const p = new URLSearchParams();
+                p.set("sort", vpSort);
+                if (vpBucket) p.set("bucket", vpBucket);
+                if (vpSearch.trim()) p.set("q", vpSearch.trim());
+                p.set("limit", VP_PER_PAGE);
+                p.set("offset", vpPage * VP_PER_PAGE);
+                return `/v1/endpoints/${vpId}?${p.toString()}`;
             }
 
-            // Re-fetch vulns ordered by the chosen sort, then refresh the list.
-            async function setVulnSort(sort) {
-                vpSort = sort;
+            // Debounce search so we don't fire a request per keystroke.
+            function onVulnSearchInput(val) {
+                vpSearch = val;
                 vpPage = 0;
-                if (!vpId) return;
-                const res = await apiFetch(
-                    `/v1/endpoints/${vpId}?sort=${vpSort}`,
-                );
-                if (res && res.ok) {
-                    const d = await res.json();
-                    vpAllVulns = d.vulnerabilities || [];
-                }
+                clearTimeout(vpSearchTimer);
+                vpSearchTimer = setTimeout(updateVulnList, 250);
+            }
+
+            function setVulnBucket(val) {
+                vpBucket = val;
+                vpPage = 0;
+                updateVulnList();
+            }
+
+            function setVulnSort(val) {
+                vpSort = val;
+                vpPage = 0;
                 updateVulnList();
             }
 
@@ -2068,15 +2118,13 @@
 
             function renderVulnPage() {
                 const ep = vpEndpoint;
-                const counts = calcBucketCounts(vpAllVulns);
-                const total = vpAllVulns.length;
+                const counts = vpBucketCounts;
+                const total = vpTotal;
 
-                applyFilter();
                 const totalPages = Math.max(
                     1,
-                    Math.ceil(vpFiltered.length / VP_PER_PAGE),
+                    Math.ceil(vpFilteredTotal / VP_PER_PAGE),
                 );
-                vpPage = Math.min(vpPage, totalPages - 1);
 
                 const legendItems = [
                     { b: "critical", label: "Critical", color: "#ef4444" },
@@ -2157,20 +2205,20 @@
         </div>
 
         <div class="ep-info-card">
-            <h2>${ep.hostname} ${statusBadge(ep.status, ep.vuln_count, ["critical", "high", "medium", "low"].find((b) => counts[b] > 0))} ${renderTags(ep.tags)}</h2>
+            <h2>${esc(ep.hostname)} ${statusBadge(ep.status, ep.vuln_count, ["critical", "high", "medium", "low"].find((b) => counts[b] > 0))} ${renderTags(ep.tags)}</h2>
             <div class="ep-kv-grid">
-                <div class="ep-kv"><span class="ep-kv-label">OS</span><span class="ep-kv-value">${ep.os} / ${ep.arch}</span></div>
-                <div class="ep-kv"><span class="ep-kv-label">User</span><span class="ep-kv-value">${ep.user || "—"}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">OS</span><span class="ep-kv-value">${esc(ep.os)} / ${esc(ep.arch)}</span></div>
+                <div class="ep-kv"><span class="ep-kv-label">User</span><span class="ep-kv-value">${esc(ep.user) || "—"}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">First seen</span><span class="ep-kv-value">${fmtDate(ep.first_seen)}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">Last seen</span><span class="ep-kv-value">${fmtDate(ep.last_seen)}</span></div>
                 ${ep.last_matched_at ? `<div class="ep-kv"><span class="ep-kv-label">Last matched</span><span class="ep-kv-value">${fmtDate(ep.last_matched_at)}</span></div>` : ""}
             </div>
             <div class="ep-kv-grid ep-scan-row">
-                ${ep.scan_root ? `<div class="ep-kv"><span class="ep-kv-label">Root</span><span class="ep-kv-value"><code>${ep.scan_root}</code></span></div>` : ""}
+                ${ep.scan_root ? `<div class="ep-kv"><span class="ep-kv-label">Root</span><span class="ep-kv-value"><code>${esc(ep.scan_root)}</code></span></div>` : ""}
                 <div class="ep-kv"><span class="ep-kv-label">Walk</span><span class="ep-kv-value">${fmtMillis(ep.scan_walk_millis)}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">Catalog</span><span class="ep-kv-value">${fmtMillis(ep.scan_catalog_millis)}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">Total</span><span class="ep-kv-value">${fmtMillis(ep.scan_millis)}</span></div>
-                <div class="ep-kv"><span class="ep-kv-label">Scan ID</span><span class="ep-kv-value"><code>${ep.last_scan_id ? ep.last_scan_id.slice(0, 8) : "—"}</code></span></div>
+                <div class="ep-kv"><span class="ep-kv-label">Scan ID</span><span class="ep-kv-value"><code>${ep.last_scan_id ? esc(ep.last_scan_id.slice(0, 8)) : "—"}</code></span></div>
             </div>
         </div>
 
@@ -2195,8 +2243,8 @@
         <div class="vuln-filter-left">
             <input class="vuln-search-input" type="text" placeholder="Filter by CVE ID, alias…"
                    value="${vpSearch.replace(/"/g, "&quot;")}"
-                   oninput="vpSearch=this.value;vpPage=0;updateVulnList()"/>
-            <select class="vuln-bucket-select" onchange="vpBucket=this.value;vpPage=0;updateVulnList()">
+                   oninput="onVulnSearchInput(this.value)"/>
+            <select class="vuln-bucket-select" onchange="setVulnBucket(this.value)">
                 <option value="">All buckets</option>
                 <option value="critical"${vpBucket === "critical" ? " selected" : ""}>Critical</option>
                 <option value="high"${vpBucket === "high" ? " selected" : ""}>High</option>
@@ -2208,7 +2256,7 @@
                 <option value="discovered"${vpSort === "discovered" ? " selected" : ""}>Sort: Discovered</option>
             </select>
         </div>
-        <div class="vuln-pagination" id="vp-pagi">${buildPagi(vpFiltered.length, totalPages)}</div>
+        <div class="vuln-pagination" id="vp-pagi">${buildPagi(vpFilteredTotal, totalPages)}</div>
     </div>
 
     <div id="vuln-list-container"></div>
@@ -2223,36 +2271,38 @@
                     <button class="page-btn" onclick="vpPage++;updateVulnList()" ${vpPage >= totalPages - 1 ? "disabled" : ""}>›</button>`;
             }
 
-            function updateVulnList() {
-                applyFilter();
+            // Re-fetch the current page from the backend and refresh list + pager.
+            // The donut/legend (bucket_counts, vuln_total) stay as loaded.
+            async function updateVulnList() {
+                if (!vpId) return;
+                const res = await apiFetch(vulnQueryURL());
+                if (!res || !res.ok) return;
+                const d = await res.json();
+                vpPageVulns = d.vulnerabilities || [];
+                vpFilteredTotal = d.filtered_total ?? vpPageVulns.length;
                 const totalPages = Math.max(
                     1,
-                    Math.ceil(vpFiltered.length / VP_PER_PAGE),
+                    Math.ceil(vpFilteredTotal / VP_PER_PAGE),
                 );
-                vpPage = Math.min(vpPage, totalPages - 1);
                 const pagi = document.getElementById("vp-pagi");
                 if (pagi)
-                    pagi.innerHTML = buildPagi(vpFiltered.length, totalPages);
+                    pagi.innerHTML = buildPagi(vpFilteredTotal, totalPages);
                 renderVulnList();
             }
 
             function renderVulnList() {
-                const pageVulns = vpFiltered.slice(
-                    vpPage * VP_PER_PAGE,
-                    (vpPage + 1) * VP_PER_PAGE,
-                );
                 const container = document.getElementById(
                     "vuln-list-container",
                 );
                 if (!container) return;
-                if (!pageVulns.length) {
+                if (!vpPageVulns.length) {
                     container.className = "";
                     container.innerHTML =
                         '<div class="empty" style="padding:32px 0">No vulnerabilities match the filter.</div>';
                     return;
                 }
                 container.className = "vuln-list-new";
-                container.innerHTML = pageVulns.map(renderVulnRow).join("");
+                container.innerHTML = vpPageVulns.map(renderVulnRow).join("");
             }
 
             function renderVulnRow(v) {
@@ -2274,8 +2324,8 @@
                                 ? ` (${v.severity_score.toFixed(1)})`
                                 : "");
                         return r.url
-                            ? `<a class="vuln-ref-chip" href="${r.url}" target="_blank" rel="noopener">${lbl}</a>`
-                            : `<span class="vuln-ref-chip">${lbl}</span>`;
+                            ? `<a class="vuln-ref-chip" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(lbl)}</a>`
+                            : `<span class="vuln-ref-chip">${esc(lbl)}</span>`;
                     })
                     .join("");
                 const isOpen = vpOpenRows.has(v.canonical_id);
@@ -2308,7 +2358,7 @@
                     );
                 const detailMain = `<div class="vuln-detail-main">
                         ${chips ? `<div class="vuln-aliases">${chips}</div>` : ""}
-                        ${v.summary ? `<div class="vuln-row-summary">${v.summary}</div>` : ""}
+                        ${v.summary ? `<div class="vuln-row-summary">${esc(v.summary)}</div>` : ""}
                     </div>`;
                 const datesCol = dateParts.length
                     ? `<div class="vuln-dates">${dateParts.join("")}</div>`
@@ -2319,14 +2369,14 @@
                     .flatMap((p) =>
                         (p.dirs?.length ? p.dirs : ["—"]).map(
                             (d) =>
-                                `<tr><td class="pkg-purl-cell">${p.purl}</td><td>${d}</td><td>${p.kind || "—"}</td><td>${p.scope || "—"}</td><td>${p.discovered_at ? fmtDate(p.discovered_at) : "—"}</td></tr>`,
+                                `<tr><td class="pkg-purl-cell">${esc(p.purl)}</td><td>${esc(d)}</td><td>${esc(p.kind) || "—"}</td><td>${esc(p.scope) || "—"}</td><td>${p.discovered_at ? fmtDate(p.discovered_at) : "—"}</td></tr>`,
                         ),
                     )
                     .join("");
                 return `<div class="vuln-row-new${isOpen ? " open" : ""}" id="vrow-${safeId}" data-cid="${escapedCid}">
                     <div class="vuln-row-header" onclick="toggleVuln(this.closest('[data-cid]').dataset.cid)">
                         <div class="vuln-row-header-left">
-                            <span class="vuln-cid">${v.canonical_id}</span>
+                            <span class="vuln-cid">${esc(v.canonical_id)}</span>
                         </div>
                         <div class="vuln-row-header-right">
                             ${bucketBadge}
@@ -2385,6 +2435,7 @@
             }
 
             async function saveSettings() {
+                if (isGuest) return; // read-only; server would 403 anyway
                 const enabled =
                     document.getElementById("email-enabled").checked;
                 const raw = document.getElementById("email-recipients").value;

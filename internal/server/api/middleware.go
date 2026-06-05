@@ -13,11 +13,31 @@ import (
 
 type contextKey string
 
-const tenantIDKey contextKey = "tenantID"
+const (
+	tenantIDKey contextKey = "tenantID"
+	roleKey     contextKey = "role"
+)
 
 func tenantIDFromCtx(ctx context.Context) string {
 	v, _ := ctx.Value(tenantIDKey).(string)
 	return v
+}
+
+func roleFromCtx(ctx context.Context) string {
+	v, _ := ctx.Value(roleKey).(string)
+	return v
+}
+
+// requireComplete rejects read-only (guest) keys. Guards every write endpoint,
+// regardless of whether auth came from an api key (ingest) or a session cookie.
+func requireComplete(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if roleFromCtx(r.Context()) != db.RoleComplete {
+			writeProblem(w, http.StatusForbidden, "forbidden", "read-only key")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // apiKeyMiddleware authenticates scanner requests via Bearer token,
@@ -47,13 +67,16 @@ func apiKeyMiddleware(database *db.DB) func(http.Handler) http.Handler {
 					writeProblem(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 					return
 				}
-				// Legacy token has no tenant — inject empty string so ingest skips tenant association.
+				// Legacy token has no tenant — inject empty string so ingest skips
+				// tenant association. It's the admin bootstrap token → complete.
 				ctx := context.WithValue(r.Context(), tenantIDKey, "")
+				ctx = context.WithValue(ctx, roleKey, db.RoleComplete)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), tenantIDKey, key.TenantID)
+			ctx = context.WithValue(ctx, roleKey, key.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -78,13 +101,14 @@ func sessionMiddleware(database *db.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			tenantID, err := auth.Verify(cookie.Value, secret)
+			tenantID, role, err := auth.Verify(cookie.Value, secret)
 			if err != nil {
 				redirectOrUnauthorized(w, r)
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), tenantIDKey, tenantID)
+			ctx = context.WithValue(ctx, roleKey, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

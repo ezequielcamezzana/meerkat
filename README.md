@@ -92,7 +92,7 @@ Full walkthroughs:
 | `meerkat service start \| stop \| status` | client | Schedule automatic scans (crontab) |
 | `meerkat cache info \| clear` | client | Inspect / clear the scan cache |
 | `meerkat server` | server | Run the HTTP server (foreground) |
-| `meerkat key create \| list \| revoke` | server | Manage API keys & tenants |
+| `meerkat key create \| guest \| list \| revoke` | server | Manage API keys & tenants (`guest` = read-only key) |
 | `meerkat migrate` | server | Apply DB migrations manually (idempotent) |
 | `meerkat version` | both | Print version, commit, build date |
 
@@ -101,6 +101,26 @@ Add `-v` / `--verbose` to any command for debug logging.
 ## Platforms
 
 macOS and Linux, `amd64` and `arm64`. No Windows yet.
+
+## Live demo
+
+A hosted instance with **synthetic data** — a fake fleet built from sample lock files — is up so you can try the dashboard without installing anything:
+
+**[https://meerkat.camecorp.lat/](https://meerkat.camecorp.lat/)**
+
+Sign in with this read-only key:
+
+```
+mk_XduLgOubsKHYZMfQy0ERYAri8P2jl54u
+```
+
+1. Open the URL — you'll land on the sign-in screen.
+2. Paste the key and click **Sign in**.
+
+You get the full read experience: the fleet grid colored by exposure, per-endpoint vulnerability pages with canonical-CVE grouping and **exposure scores**, the projects/severity donuts, the 30-day activity timeline, and the audit/fix report exports.
+
+> [!NOTE]
+> This is a **guest (read-only)** key. You can browse everything, but you can't upload inventories or change settings — writes are blocked server-side and hidden in the UI (look for the **guest · read-only** badge in the nav). All data is synthetic, so nothing here is a real machine.
 
 ## Contact
 

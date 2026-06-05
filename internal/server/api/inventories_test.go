@@ -43,12 +43,17 @@ func setupRouter(t *testing.T) (http.Handler, *db.DB, string) {
 	return router, database, token
 }
 
-// sessionCookie creates a valid session cookie for the given tenantID using the DB secret.
+// sessionCookie creates a valid complete-role session cookie for the given tenantID.
 func sessionCookie(t *testing.T, database *db.DB, tenantID string) *http.Cookie {
+	return sessionCookieRole(t, database, tenantID, db.RoleComplete)
+}
+
+// sessionCookieRole creates a valid session cookie with the given role.
+func sessionCookieRole(t *testing.T, database *db.DB, tenantID, role string) *http.Cookie {
 	t.Helper()
 	secret, err := database.GetOrCreateSessionSecret(context.Background())
 	require.NoError(t, err)
-	tok, err := auth.Sign(tenantID, secret, 24*time.Hour)
+	tok, err := auth.Sign(tenantID, role, secret, 24*time.Hour)
 	require.NoError(t, err)
 	return &http.Cookie{Name: auth.CookieName, Value: tok}
 }

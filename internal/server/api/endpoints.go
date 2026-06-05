@@ -74,9 +74,21 @@ func handleGetEndpoint(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		tenantID := tenantIDFromCtx(r.Context())
-		sort := r.URL.Query().Get("sort")
+		q := r.URL.Query()
 
-		detail, err := database.GetEndpointDetail(r.Context(), id, tenantID, sort)
+		limit := 20
+		if l, err := strconv.Atoi(q.Get("limit")); err == nil && l > 0 {
+			limit = l
+		}
+		offset, _ := strconv.Atoi(q.Get("offset"))
+
+		detail, err := database.GetEndpointDetailPage(r.Context(), id, tenantID, db.VulnQuery{
+			Sort:   q.Get("sort"),
+			Bucket: q.Get("bucket"),
+			Q:      q.Get("q"),
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			writeProblem(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
@@ -114,6 +126,9 @@ func handleGetEndpoint(database *db.DB) http.HandlerFunc {
 			"change_last_week":           detail.ChangeLastWeek,
 			"change_last_month":          detail.ChangeLastMonth,
 			"vulnerabilities":            vulns,
+			"vuln_total":                 detail.VulnTotal,
+			"filtered_total":             detail.FilteredTotal,
+			"bucket_counts":              detail.BucketCounts,
 		})
 	}
 }

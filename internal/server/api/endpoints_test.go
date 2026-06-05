@@ -49,7 +49,7 @@ func setupTenantRouter(t *testing.T) (http.Handler, *db.DB, string, *http.Cookie
 
 	apiToken, apiHash, err := auth.Generate()
 	require.NoError(t, err)
-	_, err = database.CreateAPIKey(ctx, "key-test", tenant.ID, "test-key", apiHash, time.Now().UTC().Format(time.RFC3339))
+	_, err = database.CreateAPIKey(ctx, "key-test", tenant.ID, "test-key", db.RoleComplete, apiHash, time.Now().UTC().Format(time.RFC3339))
 	require.NoError(t, err)
 
 	cookie := sessionCookie(t, database, tenant.ID)
@@ -134,7 +134,7 @@ func TestGetEndpoint_WithVulns(t *testing.T) {
 	require.NoError(t, err)
 
 	apiToken2, apiHash2, _ := auth.Generate()
-	database.CreateAPIKey(context.Background(), "key-vuln", tenantID.ID, "vuln-key", apiHash2, time.Now().UTC().Format(time.RFC3339))
+	database.CreateAPIKey(context.Background(), "key-vuln", tenantID.ID, "vuln-key", db.RoleComplete, apiHash2, time.Now().UTC().Format(time.RFC3339))
 
 	vuln := matcher.Vulnerability{ID: "CVE-2024-9999", Aliases: []string{}, Source: "osv", Summary: "Test vuln"}
 	mock := &mockMatcher{

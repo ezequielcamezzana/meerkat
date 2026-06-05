@@ -40,8 +40,12 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 	r.Post("/app/login", handleLogin(database))
 	r.Post("/app/logout", handleLogout())
 
-	// Scanner ingestion — authenticated by API key.
-	r.With(apiKeyMiddleware(database)).Post("/v1/inventories", handlePostInventory(ing))
+	// Scanner ingestion — authenticated by API key, write → complete only.
+	r.With(apiKeyMiddleware(database), requireComplete).Post("/v1/inventories", handlePostInventory(ing))
+
+	// Guest key provisioning — authenticated by a complete API key; mints a
+	// read-only key for that key's tenant.
+	r.With(apiKeyMiddleware(database), requireComplete).Post("/v1/keys/guest", handleCreateGuestKey(database))
 
 	// App UI — authenticated by session cookie.
 	r.Group(func(r chi.Router) {
@@ -53,12 +57,14 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 	// API reads — authenticated by session cookie.
 	r.Group(func(r chi.Router) {
 		r.Use(sessionMiddleware(database))
+		r.Get("/v1/session", handleSession())
 		r.Get("/v1/endpoints", handleListEndpoints(database))
 		r.Get("/v1/endpoints/{id}", handleGetEndpoint(database))
 		r.Get("/v1/endpoints/{id}/history", handleGetEndpointHistory(database))
 		r.Get("/v1/endpoints/{id}/report", handleEndpointReport(database))
 		r.Get("/v1/settings", handleGetSettings(database))
-		r.Put("/v1/settings", handlePutSettings(database))
+		// PUT is a write → complete only.
+		r.With(requireComplete).Put("/v1/settings", handlePutSettings(database))
 	})
 
 	return r

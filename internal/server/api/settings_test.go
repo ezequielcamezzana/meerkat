@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ezequielcamezzana/meerkat/internal/server/auth"
+	"github.com/ezequielcamezzana/meerkat/internal/server/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func setupSettingsTest(t *testing.T) (http.Handler, *http.Cookie) {
 
 	secret, err := database.GetOrCreateSessionSecret(ctx)
 	require.NoError(t, err)
-	tok, err := auth.Sign(tenant.ID, secret, time.Hour)
+	tok, err := auth.Sign(tenant.ID, db.RoleComplete, secret, time.Hour)
 	require.NoError(t, err)
 
 	return router, &http.Cookie{Name: auth.CookieName, Value: tok}

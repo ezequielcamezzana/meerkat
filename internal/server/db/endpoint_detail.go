@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ezequielcamezzana/meerkat/internal/server/scoring"
@@ -70,11 +71,67 @@ type EndpointDetail struct {
 	ChangeLastWeek          int            `json:"change_last_week"`
 	ChangeLastMonth         int            `json:"change_last_month"`
 	Vulnerabilities         []VulnGrouped  `json:"vulnerabilities"`
+	VulnTotal               int            `json:"vuln_total"`
+	FilteredTotal           int            `json:"filtered_total"`
+	BucketCounts            map[string]int `json:"bucket_counts"`
 }
 
-// GetEndpointDetail returns one endpoint's full detail. sort orders the grouped
-// vulnerabilities: "discovered" (newest first) or "exposure" (default).
+// VulnQuery controls grouping, ordering and pagination of an endpoint's
+// vulnerabilities. The backend owns all of it; the frontend only renders the
+// returned page. Limit <= 0 means "return every group" (used by the report).
+type VulnQuery struct {
+	Sort   string // "discovered" (newest first) or "exposure" (default)
+	Bucket string // exposure bucket filter: critical|high|medium|low ("" = all)
+	Q      string // substring match on canonical_id or aliases
+	Limit  int
+	Offset int
+}
+
+// GetEndpointDetail returns one endpoint's full detail with every grouped
+// vulnerability (including the heavy `details` body). Used by the report.
 func (s *DB) GetEndpointDetail(ctx context.Context, id, tenantID, sort string) (*EndpointDetail, error) {
+	detail, err := s.endpointMeta(ctx, id, tenantID)
+	if err != nil || detail == nil {
+		return detail, err
+	}
+
+	vulns, err := s.getEndpointVulns(ctx, id, sort, true)
+	if err != nil {
+		return nil, fmt.Errorf("getting vulns: %w", err)
+	}
+
+	detail.Vulnerabilities = vulns
+	detail.VulnTotal = len(vulns)
+	detail.FilteredTotal = len(vulns)
+	detail.BucketCounts = bucketCounts(vulns)
+	return detail, nil
+}
+
+// GetEndpointDetailPage returns one endpoint's detail with the vulnerabilities
+// filtered, sorted and paginated per q — and without the heavy `details` body,
+// which the list view never renders. BucketCounts and VulnTotal always cover the
+// full set so the donut/legend stay stable across filters.
+func (s *DB) GetEndpointDetailPage(ctx context.Context, id, tenantID string, q VulnQuery) (*EndpointDetail, error) {
+	detail, err := s.endpointMeta(ctx, id, tenantID)
+	if err != nil || detail == nil {
+		return detail, err
+	}
+
+	all, err := s.getEndpointVulns(ctx, id, q.Sort, false)
+	if err != nil {
+		return nil, fmt.Errorf("getting vulns: %w", err)
+	}
+
+	detail.BucketCounts = bucketCounts(all)
+	detail.VulnTotal = len(all)
+	filtered := filterVulns(all, q.Bucket, q.Q)
+	detail.FilteredTotal = len(filtered)
+	detail.Vulnerabilities = paginate(filtered, q.Offset, q.Limit)
+	return detail, nil
+}
+
+// endpointMeta builds an endpoint's detail without its vulnerabilities.
+func (s *DB) endpointMeta(ctx context.Context, id, tenantID string) (*EndpointDetail, error) {
 	ep, err := s.GetEndpointRow(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
@@ -109,11 +166,6 @@ func (s *DB) GetEndpointDetail(ctx context.Context, id, tenantID, sort string) (
 		return nil, fmt.Errorf("getting history: %w", err)
 	}
 
-	vulns, err := s.getEndpointVulns(ctx, id, sort)
-	if err != nil {
-		return nil, fmt.Errorf("getting vulns: %w", err)
-	}
-
 	return &EndpointDetail{
 		EndpointWithStatus:      *ep,
 		User:                    user,
@@ -128,8 +180,69 @@ func (s *DB) GetEndpointDetail(ctx context.Context, id, tenantID, sort string) (
 		ChangeLastDay:           deltaFromHistory(hist, 1),
 		ChangeLastWeek:          deltaFromHistory(hist, 7),
 		ChangeLastMonth:         deltaFromHistory(hist, 30),
-		Vulnerabilities:         vulns,
 	}, nil
+}
+
+// bucketCounts tallies grouped vulns by exposure bucket (critical/high/medium/low).
+func bucketCounts(vulns []VulnGrouped) map[string]int {
+	c := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0}
+	for _, v := range vulns {
+		if _, ok := c[v.ExposureBucket]; ok {
+			c[v.ExposureBucket]++
+		}
+	}
+	return c
+}
+
+// filterVulns keeps groups matching the bucket and search query, preserving order.
+func filterVulns(all []VulnGrouped, bucket, query string) []VulnGrouped {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if bucket == "" && q == "" {
+		return all
+	}
+	out := make([]VulnGrouped, 0, len(all))
+	for _, v := range all {
+		if bucket != "" && v.ExposureBucket != bucket {
+			continue
+		}
+		if q != "" && !matchesQuery(v, q) {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+// matchesQuery reports whether a group's canonical id or any alias contains q
+// (q is already lowercased and trimmed).
+func matchesQuery(v VulnGrouped, q string) bool {
+	if strings.Contains(strings.ToLower(v.CanonicalID), q) {
+		return true
+	}
+	for _, a := range v.Aliases {
+		if strings.Contains(strings.ToLower(a), q) {
+			return true
+		}
+	}
+	return false
+}
+
+// paginate returns the [offset, offset+limit) window. limit <= 0 returns all.
+func paginate(vulns []VulnGrouped, offset, limit int) []VulnGrouped {
+	if limit <= 0 {
+		return vulns
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(vulns) {
+		return []VulnGrouped{}
+	}
+	end := offset + limit
+	if end > len(vulns) {
+		end = len(vulns)
+	}
+	return vulns[offset:end]
 }
 
 // deltaFromHistory returns the net change in vuln count between the latest
@@ -154,17 +267,24 @@ func deltaFromHistory(entries []HistoryEntry, days int) int {
 	return latest - base
 }
 
-func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string) ([]VulnGrouped, error) {
+func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string, includeDetails bool) ([]VulnGrouped, error) {
 	orderBy := "MAX(ev.exposure_score) DESC"
 	if sort == "discovered" {
 		orderBy = "MAX(ev.discovered_at) DESC, MAX(ev.exposure_score) DESC"
+	}
+	// WHY: the list view never renders `details` (the full advisory markdown), so
+	// skip reading the blob there — it's the bulk of the payload. Only the report
+	// asks for it.
+	detailsExpr := "''"
+	if includeDetails {
+		detailsExpr = "MIN(v.details)"
 	}
 	rows, err := s.conn.QueryContext(ctx, `
 		SELECT
 			v.canonical_id,
 			MIN(v.aliases)      AS aliases,
 			MIN(v.summary)      AS summary,
-			MIN(v.details)      AS details,
+			`+detailsExpr+`     AS details,
 			MIN(v.published_at) AS published_at,
 			MAX(v.modified_at)  AS modified_at,
 			json_group_array(json_object(

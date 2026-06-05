@@ -7,32 +7,40 @@ import (
 	"fmt"
 )
 
+// API key roles. RoleComplete is read+write (the default for existing keys);
+// RoleGuest is read-only — blocked from every write endpoint.
+const (
+	RoleComplete = "complete"
+	RoleGuest    = "guest"
+)
+
 type APIKey struct {
 	ID        string `json:"id"`
 	TenantID  string `json:"tenant_id"`
 	Name      string `json:"name"`
+	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
 }
 
 var ErrKeyNotFound = errors.New("api key not found")
 
-func (s *DB) CreateAPIKey(ctx context.Context, id, tenantID, name, hash, createdAt string) (*APIKey, error) {
+func (s *DB) CreateAPIKey(ctx context.Context, id, tenantID, name, role, hash, createdAt string) (*APIKey, error) {
 	_, err := s.conn.ExecContext(ctx,
-		`INSERT INTO api_keys (id, tenant_id, name, hash, created_at) VALUES (?, ?, ?, ?, ?)`,
-		id, tenantID, name, hash, createdAt,
+		`INSERT INTO api_keys (id, tenant_id, name, role, hash, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, tenantID, name, role, hash, createdAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating api key: %w", err)
 	}
-	return &APIKey{ID: id, TenantID: tenantID, Name: name, CreatedAt: createdAt}, nil
+	return &APIKey{ID: id, TenantID: tenantID, Name: name, Role: role, CreatedAt: createdAt}, nil
 }
 
 // GetAPIKeyByHash returns the key and its tenant for a given token hash.
 func (s *DB) GetAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
 	var k APIKey
 	err := s.conn.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, created_at FROM api_keys WHERE hash = ?`, hash,
-	).Scan(&k.ID, &k.TenantID, &k.Name, &k.CreatedAt)
+		`SELECT id, tenant_id, name, role, created_at FROM api_keys WHERE hash = ?`, hash,
+	).Scan(&k.ID, &k.TenantID, &k.Name, &k.Role, &k.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrKeyNotFound
 	}
@@ -44,7 +52,7 @@ func (s *DB) GetAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) 
 
 func (s *DB) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
 	rows, err := s.conn.QueryContext(ctx,
-		`SELECT id, tenant_id, name, created_at FROM api_keys ORDER BY created_at DESC`)
+		`SELECT id, tenant_id, name, role, created_at FROM api_keys ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing api keys: %w", err)
 	}
@@ -53,7 +61,7 @@ func (s *DB) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
 	var keys []APIKey
 	for rows.Next() {
 		var k APIKey
-		if err := rows.Scan(&k.ID, &k.TenantID, &k.Name, &k.CreatedAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.TenantID, &k.Name, &k.Role, &k.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning api key: %w", err)
 		}
 		keys = append(keys, k)
