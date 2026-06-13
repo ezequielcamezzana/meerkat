@@ -1,3 +1,5 @@
+// Package scoring computes exposure scores from severity, dependency scope and
+// package kind, and buckets them into risk levels.
 package scoring
 
 func ScopeWeight(scope string) float64 {

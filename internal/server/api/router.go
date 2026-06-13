@@ -1,3 +1,4 @@
+// Package api exposes the meerkat server's HTTP endpoints and routing.
 package api
 
 import (

@@ -1,3 +1,4 @@
+// Package uploader sends the generated inventory to the meerkat server.
 package uploader
 
 import (

@@ -1,3 +1,5 @@
+// Package grouper deduplicates and aggregates discovered packages into a stable
+// inventory ordering.
 package grouper
 
 import (

@@ -1,3 +1,5 @@
+// Package scanner extracts the package list from a project, wrapping the syft
+// backend with content-hash caching.
 package scanner
 
 import (

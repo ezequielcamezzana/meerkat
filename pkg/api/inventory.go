@@ -1,3 +1,5 @@
+// Package api defines the shared inventory and package types exchanged between
+// the CLI agent and the server.
 package api
 
 import "time"

@@ -1,3 +1,5 @@
+// Package matcher resolves package vulnerabilities against OSV data and
+// extracts fixed-version information.
 package matcher
 
 import (

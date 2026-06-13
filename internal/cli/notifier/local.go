@@ -1,3 +1,5 @@
+// Package notifier surfaces scan results to the local user via desktop
+// notifications.
 package notifier
 
 import (

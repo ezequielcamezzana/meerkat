@@ -1,3 +1,5 @@
+// Package cache stores per-file scan results keyed by content hash so unchanged
+// lockfiles can skip re-scanning on subsequent runs.
 package cache
 
 import (

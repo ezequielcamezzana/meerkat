@@ -1,3 +1,4 @@
+// Package auth issues and verifies signed session cookies and API tokens.
 package auth
 
 import (

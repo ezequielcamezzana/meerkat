@@ -1,3 +1,5 @@
+// Package cataloger fans projects out across a worker pool, scanning each one
+// concurrently and collecting the resulting packages.
 package cataloger
 
 import (

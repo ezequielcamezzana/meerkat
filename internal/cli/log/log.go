@@ -1,3 +1,5 @@
+// Package log configures the CLI's slog logger, picking text or colored output
+// based on whether stderr is a terminal.
 package log
 
 import (

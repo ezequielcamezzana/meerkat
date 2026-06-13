@@ -1,3 +1,4 @@
+// Package config loads the server's configuration from the environment.
 package config
 
 import (

@@ -1,3 +1,5 @@
+// Package db owns the SQLite store: schema migrations and all query access for
+// the server.
 package db
 
 import (

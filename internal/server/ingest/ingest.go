@@ -1,3 +1,5 @@
+// Package ingest persists uploaded inventories and triggers vulnerability
+// matching against them.
 package ingest
 
 import (

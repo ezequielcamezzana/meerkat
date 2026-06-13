@@ -1,3 +1,4 @@
+// Package config loads and persists the CLI agent's local configuration.
 package config
 
 import (

@@ -1,3 +1,5 @@
+// Package service installs and removes the CLI agent as a recurring background
+// job (cron on unix, no-op elsewhere).
 package service
 
 import (

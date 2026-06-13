@@ -1,3 +1,4 @@
+// Package notifier emails users about newly discovered vulnerabilities.
 package notifier
 
 import (

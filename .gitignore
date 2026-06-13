@@ -1,5 +1,6 @@
 # Compiled binary (built at repo root by deploy.sh / go build -o meerkat)
 /meerkat
+/bin/
 *.exe
 
 # GoReleaser output

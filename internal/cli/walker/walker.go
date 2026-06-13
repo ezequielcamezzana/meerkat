@@ -1,3 +1,5 @@
+// Package walker traverses the filesystem to discover projects by their
+// lockfiles, skipping ignored and irrelevant directories.
 package walker
 
 import (

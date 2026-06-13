@@ -1,3 +1,4 @@
+// Package inventory writes the assembled package inventory to disk as JSON.
 package inventory
 
 import (
