@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>meerkat</title>
+        <title>Meerkat</title>
         <link rel="icon" type="image/png" href="/app/assets/favicon.ico" />
         <style>
             *,
@@ -58,7 +58,6 @@
                 --color-severity-low-ink: #525252;
                 --color-severity-none: #fafafa;
                 --color-severity-none-ink: #a3a3a3;
-
             }
 
             body {
@@ -91,7 +90,7 @@
             nav .brand {
                 font-family:
                     ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
-                font-size: 18px;
+                font-size: 16px;
                 font-weight: 600;
                 color: var(--ink);
                 text-decoration: none;
@@ -483,6 +482,44 @@
             }
             .vuln-dates .vm-k {
                 color: var(--mute);
+            }
+            /* Inline discovered/updated dates in the global vuln list row */
+            .gv-row-dates {
+                display: flex;
+                gap: 14px;
+                font-size: 11px;
+                color: var(--charcoal);
+                white-space: nowrap;
+            }
+            .gv-row-dates .vm-k {
+                color: var(--mute);
+            }
+            /* Lazily-loaded expand body: advisory + affected endpoints */
+            .gv-detail {
+                display: none;
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px 26px;
+            }
+            .vuln-row-new.open .gv-detail {
+                display: flex;
+            }
+            .gv-advisory {
+                font-size: 12px;
+                line-height: 1.5;
+                color: var(--charcoal);
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+            }
+            .gv-affected-label {
+                font-size: 11px;
+                color: var(--mute);
+                margin-bottom: 8px;
+            }
+            .gv-affected-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
             }
             .pkg-purl-row td {
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1220,6 +1257,69 @@
                 height: 20px;
                 display: block;
             }
+            /* Install popover — shows the one-liner so users see it before pasting.
+               A web button can't run a shell installer; we copy it instead. */
+            .install-wrap {
+                position: relative;
+                display: inline-flex;
+            }
+            .install-trigger {
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+            }
+            .install-pop {
+                position: absolute;
+                bottom: calc(100% + 10px);
+                right: 0;
+                width: min(330px, 80vw);
+                background: var(--canvas);
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius-lg);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+                padding: 14px;
+                text-align: left;
+                z-index: 50;
+            }
+            .install-pop[hidden] {
+                display: none;
+            }
+            .install-pop-label {
+                font-size: 12px;
+                color: var(--mute);
+                margin-bottom: 8px;
+            }
+            .install-cmd {
+                display: block;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                color: var(--ink);
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-sm);
+                padding: 8px 10px;
+                overflow-x: auto;
+                white-space: nowrap;
+                user-select: all;
+            }
+            .install-pop-actions {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-top: 10px;
+            }
+            .install-pop-link {
+                font-size: 12px;
+                color: var(--body);
+                text-decoration: none;
+                white-space: nowrap;
+            }
+            .install-pop-link:hover {
+                color: var(--ink);
+                text-decoration: underline;
+            }
             .login-links {
                 display: flex;
                 justify-content: center;
@@ -1325,6 +1425,17 @@
                 >
                 <a
                     class="nav-link"
+                    id="nav-vulns"
+                    href="/app/vulnerabilities"
+                    data-route="/app/vulnerabilities"
+                    onclick="
+                        navigateTo('/app/vulnerabilities');
+                        return false;
+                    "
+                    >Vulnerabilities</a
+                >
+                <a
+                    class="nav-link"
                     id="nav-settings"
                     href="/app/settings"
                     data-route="/app/settings"
@@ -1336,9 +1447,19 @@
                 >
             </div>
             <div class="nav-right">
-                <span id="guest-badge" class="guest-badge" style="display: none">guest · read-only</span>
+                <span id="guest-badge" class="guest-badge" style="display: none"
+                    >guest · read-only</span
+                >
                 <button class="btn" onclick="goHome()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
                         <path d="M21 12a9 9 0 1 1-2.64-6.36" />
                         <polyline points="21 3 21 9 15 9" />
                     </svg>
@@ -1423,6 +1544,8 @@
 
             <div id="vuln-page" style="display: none"></div>
 
+            <div id="vulns-page" style="display: none"></div>
+
             <div id="settings-container" style="display: none">
                 <div class="settings-panel">
                     <h1>Settings</h1>
@@ -1446,7 +1569,11 @@
                                 One email address per line.
                             </div>
                         </div>
-                        <button class="btn btn-primary" id="btn-save-settings" onclick="saveSettings()">
+                        <button
+                            class="btn btn-primary"
+                            id="btn-save-settings"
+                            onclick="saveSettings()"
+                        >
                             Save
                         </button>
                         <div
@@ -1777,6 +1904,7 @@
                 document.querySelector(".section-header").style.display = "";
                 document.getElementById("endpoint-list").style.display = "";
                 document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("vulns-page").style.display = "none";
                 document.getElementById("settings-container").style.display =
                     "none";
             }
@@ -1789,9 +1917,26 @@
                     "none";
                 document.getElementById("endpoint-list").style.display = "none";
                 document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("vulns-page").style.display = "none";
                 document.getElementById("settings-container").style.display =
                     "";
                 loadSettings();
+            }
+
+            function showVulns() {
+                document.getElementById("login-section").style.display = "none";
+                document.getElementById("btn-logout").style.display = "";
+                document.getElementById("app-footer").style.display = "";
+                document.querySelector(".section-header").style.display =
+                    "none";
+                document.getElementById("endpoint-list").style.display = "none";
+                document.getElementById("detail-container").style.display =
+                    "none";
+                document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("settings-container").style.display =
+                    "none";
+                document.getElementById("vulns-page").style.display = "";
+                loadVulns();
             }
 
             function goHome() {
@@ -1807,6 +1952,7 @@
                 document.getElementById("detail-container").style.display =
                     "none";
                 document.getElementById("vuln-page").style.display = "none";
+                document.getElementById("vulns-page").style.display = "none";
                 document.getElementById("settings-container").style.display =
                     "none";
                 document.getElementById("login-error").textContent = "";
@@ -1863,10 +2009,12 @@
                     rel === "/login" ? "none" : "flex";
                 // Refresh session role on any authenticated route (toggles guest UI).
                 if (rel !== "/login") loadSession();
-                // Highlight the active section: Settings, else Endpoints.
+                // Highlight the active section: Settings, Vulnerabilities, else Endpoints.
                 const activeRoute = rel.startsWith("/settings")
                     ? "/app/settings"
-                    : "/app";
+                    : rel.startsWith("/vulnerabilities")
+                      ? "/app/vulnerabilities"
+                      : "/app";
                 document.querySelectorAll("nav .nav-link").forEach((a) => {
                     a.classList.toggle(
                         "active",
@@ -1877,6 +2025,8 @@
                     showLogin();
                 } else if (rel === "/settings") {
                     showSettings();
+                } else if (rel === "/vulnerabilities") {
+                    showVulns();
                 } else if (rel.startsWith("/endpoint/")) {
                     const id = decodeURIComponent(
                         rel.slice("/endpoint/".length),
@@ -1922,6 +2072,7 @@
                 document.querySelector(".section-header").style.display =
                     "none";
                 document.getElementById("endpoint-list").style.display = "none";
+                document.getElementById("vulns-page").style.display = "none";
                 document.getElementById("settings-container").style.display =
                     "none";
                 const page = document.getElementById("vuln-page");
@@ -2205,7 +2356,13 @@
         </div>
 
         <div class="ep-info-card">
-            <h2>${esc(ep.hostname)} ${statusBadge(ep.status, ep.vuln_count, ["critical", "high", "medium", "low"].find((b) => counts[b] > 0))} ${renderTags(ep.tags)}</h2>
+            <h2>${esc(ep.hostname)} ${statusBadge(
+                ep.status,
+                ep.vuln_count,
+                ["critical", "high", "medium", "low"].find(
+                    (b) => counts[b] > 0,
+                ),
+            )} ${renderTags(ep.tags)}</h2>
             <div class="ep-kv-grid">
                 <div class="ep-kv"><span class="ep-kv-label">OS</span><span class="ep-kv-value">${esc(ep.os)} / ${esc(ep.arch)}</span></div>
                 <div class="ep-kv"><span class="ep-kv-label">User</span><span class="ep-kv-value">${esc(ep.user) || "—"}</span></div>
@@ -2413,6 +2570,259 @@
                 }
             }
 
+            // ── vulnerabilities page (vuln-centric, tenant-wide) ────────────────────────
+
+            // Backend owns search/sort/pagination; the FE just renders.
+            let gvVulns = [];
+            let gvTotal = 0;
+            let gvPage = 0;
+            let gvSearch = "";
+            let gvSort = "discovered";
+            let gvSearchTimer = null;
+            const GV_PER_PAGE = 20;
+            const gvOpenRows = new Set();
+            const gvDetailCache = {}; // canonical_id → detail, fetched once on open
+
+            function gvSafeId(cid) {
+                return cid.replace(/[^a-zA-Z0-9]/g, "-");
+            }
+
+            function gvQueryURL() {
+                const p = new URLSearchParams();
+                p.set("sort", gvSort);
+                if (gvSearch.trim()) p.set("search", gvSearch.trim());
+                p.set("limit", GV_PER_PAGE);
+                p.set("offset", gvPage * GV_PER_PAGE);
+                return `/v1/vulnerabilities?${p.toString()}`;
+            }
+
+            async function loadVulns() {
+                const page = document.getElementById("vulns-page");
+                page.innerHTML =
+                    '<div class="empty" style="padding:64px 0;text-align:center">Loading…</div>';
+                gvPage = 0;
+                gvSearch = "";
+                gvSort = "discovered";
+                gvOpenRows.clear();
+                try {
+                    const res = await apiFetch(gvQueryURL());
+                    if (!res || !res.ok)
+                        throw new Error(
+                            res ? `HTTP ${res.status}` : "redirected",
+                        );
+                    const d = await res.json();
+                    gvVulns = d.vulnerabilities || [];
+                    gvTotal = d.total ?? gvVulns.length;
+                    renderVulnsPage();
+                } catch (e) {
+                    page.innerHTML = `<div class="error-banner">Could not load vulnerabilities — ${e.message}</div>`;
+                }
+            }
+
+            function renderVulnsPage() {
+                const totalPages = Math.max(
+                    1,
+                    Math.ceil(gvTotal / GV_PER_PAGE),
+                );
+                document.getElementById("vulns-page").innerHTML = `
+<div class="ep-page">
+    <div class="section-header">
+        <h1>Vulnerabilities <span class="count-label">${gvTotal}</span></h1>
+    </div>
+    <div class="vuln-filter-bar">
+        <div class="vuln-filter-left">
+            <input class="vuln-search-input" type="text" placeholder="Search by CVE, GHSA or alias…"
+                   value="${gvSearch.replace(/"/g, "&quot;")}"
+                   oninput="onGVulnSearchInput(this.value)"/>
+            <select class="vuln-bucket-select" onchange="setGVulnSort(this.value)">
+                <option value="discovered"${gvSort === "discovered" ? " selected" : ""}>Sort: Discovered</option>
+                <option value="exposure"${gvSort === "exposure" ? " selected" : ""}>Sort: Exposure</option>
+            </select>
+        </div>
+        <div class="vuln-pagination" id="gv-pagi">${gvBuildPagi(totalPages)}</div>
+    </div>
+    <div id="gvuln-list-container"></div>
+</div>`;
+                renderGVulnList();
+            }
+
+            function gvBuildPagi(totalPages) {
+                return `<span>${gvTotal} result${gvTotal !== 1 ? "s" : ""}</span>
+                    <button class="page-btn" onclick="gvPage--;updateGVulnList()" ${gvPage === 0 ? "disabled" : ""}>‹</button>
+                    <span>${gvPage + 1} / ${totalPages}</span>
+                    <button class="page-btn" onclick="gvPage++;updateGVulnList()" ${gvPage >= totalPages - 1 ? "disabled" : ""}>›</button>`;
+            }
+
+            // Re-fetch the current page and refresh list + pager, leaving the
+            // search input untouched so focus survives a debounced keystroke.
+            async function updateGVulnList() {
+                const res = await apiFetch(gvQueryURL());
+                if (!res || !res.ok) return;
+                const d = await res.json();
+                gvVulns = d.vulnerabilities || [];
+                gvTotal = d.total ?? gvVulns.length;
+                gvOpenRows.clear();
+                const totalPages = Math.max(
+                    1,
+                    Math.ceil(gvTotal / GV_PER_PAGE),
+                );
+                const pagi = document.getElementById("gv-pagi");
+                if (pagi) pagi.innerHTML = gvBuildPagi(totalPages);
+                renderGVulnList();
+            }
+
+            function onGVulnSearchInput(val) {
+                gvSearch = val;
+                gvPage = 0;
+                clearTimeout(gvSearchTimer);
+                gvSearchTimer = setTimeout(updateGVulnList, 250);
+            }
+
+            function setGVulnSort(val) {
+                gvSort = val;
+                gvPage = 0;
+                updateGVulnList();
+            }
+
+            function renderGVulnList() {
+                const c = document.getElementById("gvuln-list-container");
+                if (!c) return;
+                if (!gvVulns.length) {
+                    c.className = "";
+                    c.innerHTML =
+                        '<div class="empty" style="padding:32px 0">No vulnerabilities found.</div>';
+                    return;
+                }
+                c.className = "vuln-list-new";
+                c.innerHTML = gvVulns.map(renderGVulnRow).join("");
+            }
+
+            // Collapsed card. The advisory body + affected endpoints load lazily
+            // on expand (task 042); here we only render the summary row.
+            function renderGVulnRow(v) {
+                const bucket = v.exposure_bucket || "low";
+                const score =
+                    v.exposure_score > 0 ? v.exposure_score.toFixed(1) : null;
+                const exposureBadge = score
+                    ? `<span class="bucket-badge bucket-${bucket}">ExS · ${score} · ${bucket}</span>`
+                    : "";
+                const sev =
+                    v.severity_score > 0 ? v.severity_score.toFixed(1) : null;
+                const cvssChip = sev
+                    ? `<span class="vuln-pkg-count">CVSS ${sev}</span>`
+                    : "";
+                const aliases = (v.aliases || [])
+                    .map(
+                        (a) => `<span class="vuln-alias-chip">${esc(a)}</span>`,
+                    )
+                    .join("");
+                const count = v.affected_count || 0;
+                const dates = [];
+                if (v.discovered_at)
+                    dates.push(
+                        `<span><span class="vm-k">Discovered</span> ${fmtDate(v.discovered_at)}</span>`,
+                    );
+                if (v.modified_at)
+                    dates.push(
+                        `<span><span class="vm-k">Updated</span> ${fmtDate(v.modified_at)}</span>`,
+                    );
+                const isOpen = gvOpenRows.has(v.canonical_id);
+                const safeId = gvSafeId(v.canonical_id);
+                const escapedCid = v.canonical_id
+                    .replace(/&/g, "&amp;")
+                    .replace(/"/g, "&quot;");
+                return `<div class="vuln-row-new${isOpen ? " open" : ""}" id="gvrow-${safeId}" data-cid="${escapedCid}">
+                    <div class="vuln-row-header" onclick="toggleGVuln(this.closest('[data-cid]').dataset.cid)">
+                        <div class="vuln-row-header-left">
+                            <span class="vuln-cid">${esc(v.canonical_id)}</span>
+                            ${aliases}
+                        </div>
+                        <div class="vuln-row-header-right">
+                            ${dates.length ? `<span class="gv-row-dates">${dates.join("")}</span>` : ""}
+                            ${exposureBadge}
+                            ${cvssChip}
+                            <span class="vuln-pkg-count">${count} endpoint${count !== 1 ? "s" : ""}</span>
+                            <span class="vuln-chevron${isOpen ? " open" : ""}">▶</span>
+                        </div>
+                    </div>
+                    <div class="gv-detail" id="gvbody-${safeId}"></div>
+                </div>`;
+            }
+
+            // Toggle a card; fetch its advisory + affected endpoints on first open.
+            async function toggleGVuln(cid) {
+                const safeId = gvSafeId(cid);
+                const row = document.getElementById(`gvrow-${safeId}`);
+                if (!row) return;
+                const open = !gvOpenRows.has(cid);
+                if (open) gvOpenRows.add(cid);
+                else gvOpenRows.delete(cid);
+                row.classList.toggle("open", open);
+                const ch = row.querySelector(".vuln-chevron");
+                if (ch) ch.classList.toggle("open", open);
+                if (open) await loadGVulnDetail(cid);
+            }
+
+            async function loadGVulnDetail(cid) {
+                const body = document.getElementById(`gvbody-${gvSafeId(cid)}`);
+                if (!body) return;
+                if (gvDetailCache[cid]) {
+                    body.innerHTML = renderGVulnDetail(gvDetailCache[cid]);
+                    return;
+                }
+                body.innerHTML =
+                    '<div class="empty" style="padding:8px 0">Loading…</div>';
+                const res = await apiFetch(
+                    `/v1/vulnerabilities/${encodeURIComponent(cid)}`,
+                );
+                if (!res || !res.ok) {
+                    body.innerHTML = `<div class="error-banner">Could not load details${res ? " — HTTP " + res.status : ""}</div>`;
+                    return;
+                }
+                const d = await res.json();
+                gvDetailCache[cid] = d;
+                body.innerHTML = renderGVulnDetail(d);
+            }
+
+            function renderGVulnDetail(d) {
+                const text = d.details || d.summary || "";
+                const advisory = text
+                    ? `<div class="gv-advisory">${esc(text)}</div>`
+                    : "";
+                const eps = (d.affected_endpoints || [])
+                    .map(renderAffectedEndpoint)
+                    .join("");
+                const list = eps
+                    ? `<div class="gv-affected-list">${eps}</div>`
+                    : '<div class="empty" style="padding:8px 0">No affected endpoints.</div>';
+                return `${advisory}
+                    <div>
+                        <div class="gv-affected-label">Affected endpoints</div>
+                        ${list}
+                    </div>`;
+            }
+
+            function renderAffectedEndpoint(e) {
+                const exp =
+                    e.exposure_score > 0
+                        ? `<span class="vuln-pkg-count">ExS · ${e.exposure_score.toFixed(1)}</span>`
+                        : "";
+                const pkg = `${esc(e.package_name)}@${esc(e.package_version)}`;
+                const fixed = e.fixed_version
+                    ? ` · fix ${esc(e.fixed_version)}`
+                    : "";
+                const eid = (e.endpoint_id || "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/"/g, "&quot;");
+                return `<div class="endpoint-card" data-eid="${eid}" onclick="selectEndpoint(this.dataset.eid)">
+                    <div class="endpoint-main">
+                        <div class="endpoint-hostname">${esc(e.hostname)}</div>
+                        <div class="endpoint-meta"><span>${esc(e.os)}</span><span>${pkg}${fixed}</span></div>
+                    </div>
+                    ${exp}
+                </div>`;
+            }
+
             // ── settings ──────────────────────────────────────────────────────────────
 
             async function loadSettings() {
@@ -2473,6 +2883,48 @@
 
             // ── init ──────────────────────────────────────────────────────────────────
 
+            // One-liner installer. A web button can't run a shell command (browser
+            // sandbox), so the Install icon opens a popover that copies this instead.
+            const INSTALL_CMD =
+                "curl -fsSL https://raw.githubusercontent.com/ezequielcamezzana/meerkat/main/install.sh | sh";
+
+            function toggleInstall(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const pop =
+                    e.currentTarget.parentElement.querySelector(".install-pop");
+                const willOpen = pop.hidden;
+                document
+                    .querySelectorAll(".install-pop")
+                    .forEach((p) => (p.hidden = true));
+                pop.hidden = !willOpen;
+            }
+
+            function copyInstall(btn) {
+                const cmd = btn
+                    .closest(".install-pop")
+                    .querySelector(".install-cmd").textContent;
+                navigator.clipboard
+                    .writeText(cmd)
+                    .then(() => {
+                        const prev = btn.textContent;
+                        btn.textContent = "Copied";
+                        setTimeout(() => {
+                            btn.textContent = prev;
+                        }, 1500);
+                    })
+                    .catch(() => {}); // clipboard blocked → user can select the visible command
+            }
+
+            // Click outside closes any open install popover.
+            document.addEventListener("click", (e) => {
+                if (!e.target.closest(".install-wrap")) {
+                    document
+                        .querySelectorAll(".install-pop")
+                        .forEach((p) => (p.hidden = true));
+                }
+            });
+
             // External links — rendered once into the login card and the nav.
             const BRAND_LINKS = [
                 {
@@ -2486,15 +2938,27 @@
                     svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h7a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg>`,
                 },
                 {
-                    href: "https://github.com/ezequielcamezzana/meerkat/releases",
+                    install: true,
                     title: "Install",
                     svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
                 },
             ];
-            const brandLinksHTML = BRAND_LINKS.map(
-                (l) =>
-                    `<a class="icon-link" href="${l.href}" target="_blank" rel="noopener" title="${l.title}" aria-label="${l.title}">${l.svg}</a>`,
-            ).join("");
+            const brandLinksHTML = BRAND_LINKS.map((l) => {
+                if (l.install) {
+                    return `<span class="install-wrap">
+                        <button class="icon-link install-trigger" type="button" title="Install" aria-label="Install" onclick="toggleInstall(event)">${l.svg}</button>
+                        <div class="install-pop" hidden>
+                            <div class="install-pop-label">Install — macOS / Linux</div>
+                            <code class="install-cmd">${esc(INSTALL_CMD)}</code>
+                            <div class="install-pop-actions">
+                                <button class="btn" type="button" onclick="copyInstall(this)">Copy</button>
+                                <a class="install-pop-link" href="https://github.com/ezequielcamezzana/meerkat/releases" target="_blank" rel="noopener">or download binaries →</a>
+                            </div>
+                        </div>
+                    </span>`;
+                }
+                return `<a class="icon-link" href="${l.href}" target="_blank" rel="noopener" title="${l.title}" aria-label="${l.title}">${l.svg}</a>`;
+            }).join("");
             document.getElementById("login-links").innerHTML = brandLinksHTML;
             document.getElementById("footer-links").innerHTML = brandLinksHTML;
 

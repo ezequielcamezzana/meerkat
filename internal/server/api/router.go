@@ -63,6 +63,8 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 		r.Get("/v1/endpoints/{id}", handleGetEndpoint(database))
 		r.Get("/v1/endpoints/{id}/history", handleGetEndpointHistory(database))
 		r.Get("/v1/endpoints/{id}/report", handleEndpointReport(database))
+		r.Get("/v1/vulnerabilities", handleListVulns(database))
+		r.Get("/v1/vulnerabilities/{id}", handleGetVuln(database))
 		r.Get("/v1/settings", handleGetSettings(database))
 		// PUT is a write → complete only.
 		r.With(requireComplete).Put("/v1/settings", handlePutSettings(database))

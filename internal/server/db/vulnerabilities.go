@@ -2,12 +2,14 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/ezequielcamezzana/meerkat/internal/server/matcher"
+	"github.com/ezequielcamezzana/meerkat/internal/server/scoring"
 )
 
 // UpsertVulnerability writes a freshly-fetched vuln record. fetchedAt stamps
@@ -167,6 +169,201 @@ func (s *DB) ReplaceEndpointVulnerabilities(ctx context.Context, endpointID stri
 		return fmt.Errorf("removing stale endpoint vulns: %w", err)
 	}
 	return nil
+}
+
+// VulnListQuery filters the tenant-wide vuln listing. Sort is "discovered"
+// (default) or "exposure"; an empty/unknown value falls back to "discovered".
+type VulnListQuery struct {
+	Search string
+	Sort   string
+	Limit  int
+	Offset int
+}
+
+// VulnSummary is one row of the vuln-centric listing: a vuln grouped by
+// canonical_id and aggregated across every affected endpoint of the tenant.
+// It omits the advisory body — that's loaded lazily via GetTenantVulnDetail.
+type VulnSummary struct {
+	CanonicalID    string   `json:"canonical_id"`
+	Aliases        []string `json:"aliases,omitempty"`
+	SeverityScore  float64  `json:"severity_score"`
+	ExposureScore  float64  `json:"exposure_score"`
+	ExposureBucket string   `json:"exposure_bucket"`
+	DiscoveredAt   string   `json:"discovered_at,omitempty"`
+	ModifiedAt     string   `json:"modified_at,omitempty"`
+	AffectedCount  int      `json:"affected_count"`
+}
+
+// ListTenantVulns lists the vulns present across the tenant's endpoints,
+// grouped by canonical_id, paginated/searched/sorted. The returned int is the
+// total number of matching groups, independent of Limit/Offset.
+func (s *DB) ListTenantVulns(ctx context.Context, tenantID string, q VulnListQuery) ([]VulnSummary, int, error) {
+	orderBy := "discovered_at DESC, exposure_score DESC"
+	if q.Sort == "exposure" {
+		orderBy = "exposure_score DESC, discovered_at DESC"
+	}
+
+	// COMPLEX: search matches the group when ANY of its vuln rows matches, so we
+	// filter by canonical_id IN (matching ids) instead of a row-level WHERE —
+	// otherwise dropping non-matching rows would skew affected_count.
+	args := []any{tenantID}
+	searchClause := ""
+	if q.Search != "" {
+		like := "%" + q.Search + "%"
+		searchClause = `
+			AND v.canonical_id IN (
+				SELECT canonical_id FROM vulnerabilities
+				WHERE id LIKE ? OR canonical_id LIKE ? OR aliases LIKE ?
+			)`
+		args = append(args, like, like, like)
+	}
+
+	var total int
+	countQuery := `
+		SELECT COUNT(DISTINCT v.canonical_id)
+		FROM endpoint_vulnerabilities ev
+		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
+		JOIN endpoints e ON e.id = ev.endpoint_id
+		WHERE e.tenant_id = ?` + searchClause
+	if err := s.conn.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting tenant vulns: %w", err)
+	}
+
+	listQuery := `
+		SELECT
+			v.canonical_id,
+			MIN(v.aliases)                    AS aliases,
+			MAX(v.severity_score)             AS severity_score,
+			MAX(ev.exposure_score)            AS exposure_score,
+			MIN(NULLIF(ev.discovered_at, '')) AS discovered_at,
+			MAX(v.modified_at)                AS modified_at,
+			COUNT(DISTINCT ev.endpoint_id)    AS affected_count
+		FROM endpoint_vulnerabilities ev
+		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
+		JOIN endpoints e ON e.id = ev.endpoint_id
+		WHERE e.tenant_id = ?` + searchClause + `
+		GROUP BY v.canonical_id
+		ORDER BY ` + orderBy
+	if q.Limit > 0 {
+		listQuery += " LIMIT ? OFFSET ?"
+		args = append(args, q.Limit, q.Offset)
+	}
+
+	rows, err := s.conn.QueryContext(ctx, listQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing tenant vulns: %w", err)
+	}
+	defer rows.Close()
+
+	var result []VulnSummary
+	for rows.Next() {
+		var v VulnSummary
+		var aliasesJSON string
+		var discoveredAt, modifiedAt sql.NullString
+		if err := rows.Scan(
+			&v.CanonicalID, &aliasesJSON, &v.SeverityScore, &v.ExposureScore,
+			&discoveredAt, &modifiedAt, &v.AffectedCount,
+		); err != nil {
+			return nil, 0, err
+		}
+		v.DiscoveredAt = discoveredAt.String
+		v.ModifiedAt = modifiedAt.String
+		v.ExposureBucket = scoring.Bucket(v.ExposureScore)
+		json.Unmarshal([]byte(aliasesJSON), &v.Aliases)
+		result = append(result, v)
+	}
+	return result, total, rows.Err()
+}
+
+// AffectedEndpoint is one endpoint of the tenant where a vuln is present, with
+// the vulnerable package and that endpoint's exposure for the vuln.
+type AffectedEndpoint struct {
+	EndpointID     string  `json:"endpoint_id"`
+	Hostname       string  `json:"hostname"`
+	OS             string  `json:"os"`
+	ExposureScore  float64 `json:"exposure_score"`
+	PackageName    string  `json:"package_name"`
+	PackageVersion string  `json:"package_version"`
+	FixedVersion   string  `json:"fixed_version,omitempty"`
+}
+
+// VulnDetail is the lazily-loaded body of a vuln card: the advisory plus every
+// affected endpoint of the tenant.
+type VulnDetail struct {
+	CanonicalID       string             `json:"canonical_id"`
+	Aliases           []string           `json:"aliases,omitempty"`
+	Summary           string             `json:"summary"`
+	Details           string             `json:"details"`
+	PublishedAt       string             `json:"published_at,omitempty"`
+	ModifiedAt        string             `json:"modified_at,omitempty"`
+	AffectedEndpoints []AffectedEndpoint `json:"affected_endpoints"`
+}
+
+// GetTenantVulnDetail returns the advisory for a canonical_id plus the tenant's
+// affected endpoints, or nil if the vuln isn't present in the tenant.
+func (s *DB) GetTenantVulnDetail(ctx context.Context, tenantID, canonicalID string) (*VulnDetail, error) {
+	// Advisory fields collapsed across the vuln ids sharing this canonical_id,
+	// scoped to the tenant via the affected endpoints. COUNT tells us whether the
+	// vuln is present at all (the aggregates would otherwise be NULL).
+	var count int
+	var aliasesJSON, summary, details sql.NullString
+	var publishedAt, modifiedAt sql.NullString
+	err := s.conn.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			MIN(v.aliases),
+			MIN(v.summary),
+			MIN(v.details),
+			MIN(v.published_at),
+			MAX(v.modified_at)
+		FROM endpoint_vulnerabilities ev
+		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
+		JOIN endpoints e ON e.id = ev.endpoint_id
+		WHERE v.canonical_id = ? AND e.tenant_id = ?`,
+		canonicalID, tenantID,
+	).Scan(&count, &aliasesJSON, &summary, &details, &publishedAt, &modifiedAt)
+	if err != nil {
+		return nil, fmt.Errorf("reading vuln advisory: %w", err)
+	}
+	if count == 0 {
+		return nil, nil
+	}
+
+	detail := &VulnDetail{
+		CanonicalID: canonicalID,
+		Summary:     summary.String,
+		Details:     details.String,
+		PublishedAt: publishedAt.String,
+		ModifiedAt:  modifiedAt.String,
+	}
+	json.Unmarshal([]byte(aliasesJSON.String), &detail.Aliases)
+
+	rows, err := s.conn.QueryContext(ctx, `
+		SELECT e.id, e.hostname, e.os, ev.exposure_score,
+		       ev.package_name, ev.package_version, ev.fixed_version
+		FROM endpoint_vulnerabilities ev
+		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
+		JOIN endpoints e ON e.id = ev.endpoint_id
+		WHERE v.canonical_id = ? AND e.tenant_id = ?
+		ORDER BY ev.exposure_score DESC`,
+		canonicalID, tenantID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing affected endpoints: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var a AffectedEndpoint
+		if err := rows.Scan(
+			&a.EndpointID, &a.Hostname, &a.OS, &a.ExposureScore,
+			&a.PackageName, &a.PackageVersion, &a.FixedVersion,
+		); err != nil {
+			return nil, err
+		}
+		detail.AffectedEndpoints = append(detail.AffectedEndpoints, a)
+	}
+	return detail, rows.Err()
 }
 
 func (s *DB) GetPreviousCanonicalIDs(ctx context.Context, endpointID string) ([]string, error) {
