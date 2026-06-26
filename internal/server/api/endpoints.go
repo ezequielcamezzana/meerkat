@@ -83,11 +83,12 @@ func handleGetEndpoint(database *db.DB) http.HandlerFunc {
 		offset, _ := strconv.Atoi(q.Get("offset"))
 
 		detail, err := database.GetEndpointDetailPage(r.Context(), id, tenantID, db.VulnQuery{
-			Sort:   q.Get("sort"),
-			Bucket: q.Get("bucket"),
-			Q:      q.Get("q"),
-			Limit:  limit,
-			Offset: offset,
+			Sort:    q.Get("sort"),
+			Bucket:  q.Get("bucket"),
+			Project: q.Get("project"),
+			Q:       q.Get("q"),
+			Limit:   limit,
+			Offset:  offset,
 		})
 		if err != nil {
 			writeProblem(w, http.StatusInternalServerError, "internal_error", err.Error())
@@ -127,8 +128,10 @@ func handleGetEndpoint(database *db.DB) http.HandlerFunc {
 			"change_last_month":          detail.ChangeLastMonth,
 			"vulnerabilities":            vulns,
 			"vuln_total":                 detail.VulnTotal,
+			"fixable_total":              detail.FixableTotal,
 			"filtered_total":             detail.FilteredTotal,
 			"bucket_counts":              detail.BucketCounts,
+			"project_stats":              detail.ProjectStats,
 		})
 	}
 }

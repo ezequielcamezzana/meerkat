@@ -700,6 +700,66 @@
                 background-repeat: no-repeat;
                 background-position: right 14px center;
             }
+            .modal-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100;
+                padding: 24px;
+            }
+            .modal-card {
+                background: var(--canvas);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-lg);
+                padding: 24px;
+                width: 100%;
+                max-width: 440px;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .modal-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .modal-title {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--ink);
+            }
+            .modal-close {
+                border: none;
+                background: none;
+                font-size: 22px;
+                line-height: 1;
+                color: var(--mute);
+                cursor: pointer;
+            }
+            .modal-sub {
+                font-size: 13px;
+                color: var(--body);
+                margin: 0;
+            }
+            .mechanic-stats {
+                font-size: 14px;
+                color: var(--charcoal);
+                padding: 12px 16px;
+                background: var(--surface-soft);
+                border-radius: var(--radius-sm);
+            }
+            .mechanic-help {
+                font-size: 12px;
+                color: var(--body);
+                margin: 0;
+                padding-left: 18px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
             .vuln-pagination {
                 display: flex;
                 align-items: center;
@@ -829,6 +889,18 @@
                 max-width: 220px;
                 word-break: break-all;
                 font-size: 11px;
+            }
+            /* PURL → Magpie link. Inherits the surrounding mono color; only the
+               underline marks it, going ink on hover. */
+            .pkg-link {
+                color: inherit;
+                text-decoration: underline;
+                text-decoration-color: var(--hairline-strong);
+                text-underline-offset: 2px;
+            }
+            .pkg-link:hover {
+                color: var(--ink);
+                text-decoration-color: currentColor;
             }
             .pkg-dirs-cell {
                 font-size: 11px;
@@ -1597,6 +1669,7 @@
             let allEndpoints = [];
             let totalCount = 0;
             let isGuest = false; // read-only session — set by loadSession()
+            let magpieURL = ""; // Magpie base URL — set by loadSession(); "" disables PURL links
 
             // ── view / tag state ─────────────────────────────────────────────────────
 
@@ -1629,6 +1702,15 @@
                     .replace(/>/g, "&gt;")
                     .replace(/"/g, "&quot;")
                     .replace(/'/g, "&#39;");
+            }
+
+            // Renders a PURL as text, or — when Magpie is configured — as a link to
+            // its collect view. stopPropagation keeps clicks off any parent card.
+            function purlLink(purl) {
+                if (!purl) return "—";
+                if (!magpieURL) return esc(purl);
+                const href = `${magpieURL}/app/collect?purl=${encodeURIComponent(purl)}`;
+                return `<a class="pkg-link" href="${esc(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(purl)}</a>`;
             }
 
             function statusBadge(status, vulnCount, worstBucket) {
@@ -1730,6 +1812,7 @@
                     if (!res || !res.ok) return;
                     const data = await res.json();
                     isGuest = data.role === "guest";
+                    magpieURL = data.magpie_url || "";
                 } catch (e) {
                     isGuest = false;
                 }
@@ -1748,10 +1831,8 @@
             async function loadEndpoints() {
                 try {
                     const res = await apiFetch("/v1/endpoints");
-                    if (!res || !res.ok)
-                        throw new Error(
-                            res ? `HTTP ${res.status}` : "redirected",
-                        );
+                    if (!res) return; // 401 → apiFetch already redirected to login
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const data = await res.json();
                     allEndpoints = data.endpoints || [];
                     totalCount = data.total || 0;
@@ -2060,6 +2141,7 @@
             let vpPage = 0;
             let vpSearch = "";
             let vpBucket = "";
+            let vpProject = "";
             let vpSort = "exposure";
             let vpSearchTimer = null;
             const VP_PER_PAGE = 20;
@@ -2083,16 +2165,15 @@
                 vpPage = 0;
                 vpSearch = "";
                 vpBucket = "";
+                vpProject = "";
                 vpSort = "exposure";
                 try {
                     const [epRes, histRes] = await Promise.all([
                         apiFetch(vulnQueryURL()),
                         apiFetch(`/v1/endpoints/${id}/history?days=30`),
                     ]);
-                    if (!epRes || !epRes.ok)
-                        throw new Error(
-                            epRes ? `HTTP ${epRes.status}` : "redirected",
-                        );
+                    if (!epRes) return; // 401 → apiFetch already redirected to login
+                    if (!epRes.ok) throw new Error(`HTTP ${epRes.status}`);
                     vpEndpoint = await epRes.json();
                     vpPageVulns = vpEndpoint.vulnerabilities || [];
                     vpBucketCounts = vpEndpoint.bucket_counts || vpBucketCounts;
@@ -2199,6 +2280,7 @@
                 const p = new URLSearchParams();
                 p.set("sort", vpSort);
                 if (vpBucket) p.set("bucket", vpBucket);
+                if (vpProject) p.set("project", vpProject);
                 if (vpSearch.trim()) p.set("q", vpSearch.trim());
                 p.set("limit", VP_PER_PAGE);
                 p.set("offset", vpPage * VP_PER_PAGE);
@@ -2219,18 +2301,62 @@
                 updateVulnList();
             }
 
+            function setVulnProject(val) {
+                vpProject = val;
+                vpPage = 0;
+                updateVulnList();
+            }
+
+            // A project's dir shown relative to scan_root: short, but still
+            // disambiguates same-named dirs in different locations (the value
+            // sent to the backend stays the absolute dir for an exact match).
+            function projectLabel(dir, root) {
+                if (dir === root) return ".";
+                if (root && dir.startsWith(root + "/"))
+                    return dir.slice(root.length + 1);
+                return dir;
+            }
+
+            // Builds the <select> for the project filter from project_stats — the
+            // projects that actually have vulns, derived live from the vuln data.
+            // WHY: deriving from the vulns (not persisted scan metadata) keeps the
+            // filter immune to client-version skew, and a clean project would
+            // filter to zero results anyway. Empty string when there are none.
+            function projectSelect() {
+                const stats = (vpEndpoint && vpEndpoint.project_stats) || [];
+                if (!stats.length) return "";
+                const root = (vpEndpoint && vpEndpoint.scan_root) || "";
+                const opts = stats
+                    .map((s) => ({ dir: s.dir, label: projectLabel(s.dir, root) }))
+                    .sort((a, b) => a.label.localeCompare(b.label))
+                    .map(
+                        (p) =>
+                            `<option value="${esc(p.dir)}"${vpProject === p.dir ? " selected" : ""}>${esc(p.label)}</option>`,
+                    )
+                    .join("");
+                return `<select class="vuln-bucket-select" onchange="setVulnProject(this.value)">
+                    <option value="">All projects</option>
+                    ${opts}
+                </select>`;
+            }
+
             function setVulnSort(val) {
                 vpSort = val;
                 vpPage = 0;
                 updateVulnList();
             }
 
+            // Builds the report URL; project ("" = all) only applies to the fix kind.
+            function reportURL(kind, project) {
+                const p = new URLSearchParams({ kind });
+                if (project) p.set("project", project);
+                return `/v1/endpoints/${vpId}/report?${p.toString()}`;
+            }
+
             // Report downloads. audit → JSON file; fix → Markdown copied to clipboard.
-            async function downloadReport(kind) {
+            async function downloadReport(kind, project) {
                 if (!vpId) return;
-                const res = await apiFetch(
-                    `/v1/endpoints/${vpId}/report?kind=${kind}`,
-                );
+                const res = await apiFetch(reportURL(kind, project));
                 if (!res || !res.ok) return;
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
@@ -2243,18 +2369,16 @@
                 URL.revokeObjectURL(url);
             }
 
-            async function copyReport(kind) {
+            async function copyReport(kind, project, labelSelector) {
                 if (!vpId) return;
-                const res = await apiFetch(
-                    `/v1/endpoints/${vpId}/report?kind=${kind}`,
-                );
+                const res = await apiFetch(reportURL(kind, project));
                 if (!res || !res.ok) return;
                 const text = await res.text();
                 try {
                     await navigator.clipboard.writeText(text);
-                    const label = document.querySelector(
-                        "#btn-copy-fix .btn-label",
-                    );
+                    const label = labelSelector
+                        ? document.querySelector(labelSelector)
+                        : null;
                     if (label) {
                         const prev = label.textContent;
                         label.textContent = "Copied";
@@ -2263,8 +2387,90 @@
                         }, 1500);
                     }
                 } catch (e) {
-                    downloadReport(kind); // clipboard blocked → fall back to a download
+                    downloadReport(kind, project); // clipboard blocked → fall back to a download
                 }
+            }
+
+            // Mechanic modal: pick a project (or all) and copy a fix-prompt scoped
+            // to it. Only projects that actually have vulns are offered.
+            function openMechanic() {
+                const stats = (vpEndpoint && vpEndpoint.project_stats) || [];
+                const root = (vpEndpoint && vpEndpoint.scan_root) || "";
+                const options = stats
+                    .filter((s) => s.vuln_count > 0)
+                    .map(
+                        (s) =>
+                            `<option value="${esc(s.dir)}">${esc(projectLabel(s.dir, root))}</option>`,
+                    )
+                    .join("");
+                const overlay = document.createElement("div");
+                overlay.className = "modal-overlay";
+                overlay.innerHTML = `
+                    <div class="modal-card" role="dialog" aria-label="Mechanic">
+                        <div class="modal-head">
+                            <span class="modal-title">Mechanic</span>
+                            <button class="modal-close" onclick="closeMechanic()" aria-label="Close">×</button>
+                        </div>
+                        <p class="modal-sub">Generate a remediation prompt for a coding agent, scoped to one project.</p>
+                        <select class="vuln-bucket-select" id="mechanic-project" onchange="updateMechanicStats()">
+                            <option value="">All projects</option>
+                            ${options}
+                        </select>
+                        <div class="mechanic-stats" id="mechanic-stats"></div>
+                        <button class="btn" id="mechanic-copy" onclick="copyMechanic()">
+                            <span class="btn-label">Copy fix prompt</span>
+                        </button>
+                        <ol class="mechanic-help">
+                            <li>Paste the copied prompt into a coding agent (Claude Code, etc.).</li>
+                            <li>It bumps the listed packages and updates the lockfile, one project at a time.</li>
+                            <li>Verify the project still builds before moving on.</li>
+                        </ol>
+                    </div>`;
+                overlay.addEventListener("click", (e) => {
+                    if (e.target === overlay) closeMechanic();
+                });
+                document.body.appendChild(overlay);
+                document.addEventListener("keydown", mechanicEsc);
+                updateMechanicStats();
+            }
+
+            function mechanicEsc(e) {
+                if (e.key === "Escape") closeMechanic();
+            }
+
+            function closeMechanic() {
+                document.removeEventListener("keydown", mechanicEsc);
+                const overlay = document.querySelector(".modal-overlay");
+                if (overlay) overlay.remove();
+            }
+
+            // Reflects the selected project's counts; "All projects" uses the
+            // endpoint-wide totals (deduplicated, not a sum of per-project counts).
+            function updateMechanicStats() {
+                const sel = document.getElementById("mechanic-project");
+                const el = document.getElementById("mechanic-stats");
+                if (!sel || !el) return;
+                let vulns, fixable;
+                if (sel.value === "") {
+                    vulns = vpEndpoint.vuln_total || 0;
+                    fixable = vpEndpoint.fixable_total || 0;
+                } else {
+                    const s = (vpEndpoint.project_stats || []).find(
+                        (s) => s.dir === sel.value,
+                    ) || { vuln_count: 0, fixable_count: 0 };
+                    vulns = s.vuln_count;
+                    fixable = s.fixable_count;
+                }
+                el.innerHTML = `<strong>${vulns}</strong> vuln${vulns !== 1 ? "s" : ""}, <strong>${fixable}</strong> with a fix available`;
+            }
+
+            async function copyMechanic() {
+                const sel = document.getElementById("mechanic-project");
+                await copyReport(
+                    "fix",
+                    sel ? sel.value : "",
+                    "#mechanic-copy .btn-label",
+                );
             }
 
             function renderVulnPage() {
@@ -2331,12 +2537,11 @@
                 </svg>
                 Audit (JSON)
             </button>
-            <button class="btn" id="btn-copy-fix" onclick="copyReport('fix')">
+            <button class="btn" id="btn-mechanic" onclick="openMechanic()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    <path d="M14.7 6.3a4 4 0 0 0-5.4 5.3L3 18l3 3 6.4-6.3a4 4 0 0 0 5.3-5.4l-2.6 2.6-2.3-.6-.6-2.3z" />
                 </svg>
-                <span class="btn-label">Copy fix</span>
+                Mechanic
             </button>
         </div>
     </div>
@@ -2408,6 +2613,7 @@
                 <option value="medium"${vpBucket === "medium" ? " selected" : ""}>Medium</option>
                 <option value="low"${vpBucket === "low" ? " selected" : ""}>Low</option>
             </select>
+            ${projectSelect()}
             <select class="vuln-bucket-select" onchange="setVulnSort(this.value)">
                 <option value="exposure"${vpSort === "exposure" ? " selected" : ""}>Sort: Exposure</option>
                 <option value="discovered"${vpSort === "discovered" ? " selected" : ""}>Sort: Discovered</option>
@@ -2526,7 +2732,7 @@
                     .flatMap((p) =>
                         (p.dirs?.length ? p.dirs : ["—"]).map(
                             (d) =>
-                                `<tr><td class="pkg-purl-cell">${esc(p.purl)}</td><td>${esc(d)}</td><td>${esc(p.kind) || "—"}</td><td>${esc(p.scope) || "—"}</td><td>${p.discovered_at ? fmtDate(p.discovered_at) : "—"}</td></tr>`,
+                                `<tr><td class="pkg-purl-cell">${purlLink(p.purl)}</td><td>${esc(d)}</td><td>${esc(p.kind) || "—"}</td><td>${esc(p.scope) || "—"}</td><td>${p.discovered_at ? fmtDate(p.discovered_at) : "—"}</td></tr>`,
                         ),
                     )
                     .join("");
@@ -2606,10 +2812,8 @@
                 gvOpenRows.clear();
                 try {
                     const res = await apiFetch(gvQueryURL());
-                    if (!res || !res.ok)
-                        throw new Error(
-                            res ? `HTTP ${res.status}` : "redirected",
-                        );
+                    if (!res) return; // 401 → apiFetch already redirected to login
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const d = await res.json();
                     gvVulns = d.vulnerabilities || [];
                     gvTotal = d.total ?? gvVulns.length;
@@ -2807,7 +3011,11 @@
                     e.exposure_score > 0
                         ? `<span class="vuln-pkg-count">ExS · ${e.exposure_score.toFixed(1)}</span>`
                         : "";
-                const pkg = `${esc(e.package_name)}@${esc(e.package_version)}`;
+                // Full PURL disambiguates same-name packages from different
+                // ecosystems/versions on one endpoint; falls back to name@version.
+                const pkg = e.purl
+                    ? purlLink(e.purl)
+                    : `${esc(e.package_name)}@${esc(e.package_version)}`;
                 const fixed = e.fixed_version
                     ? ` · fix ${esc(e.fixed_version)}`
                     : "";
@@ -2828,10 +3036,8 @@
             async function loadSettings() {
                 try {
                     const res = await apiFetch("/v1/settings");
-                    if (!res || !res.ok)
-                        throw new Error(
-                            res ? `HTTP ${res.status}` : "redirected",
-                        );
+                    if (!res) return; // 401 → apiFetch already redirected to login
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const data = await res.json();
                     const email = data.notifications?.email || {};
                     document.getElementById("email-enabled").checked =

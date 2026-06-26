@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,19 +73,32 @@ type EndpointDetail struct {
 	ChangeLastMonth         int            `json:"change_last_month"`
 	Vulnerabilities         []VulnGrouped  `json:"vulnerabilities"`
 	VulnTotal               int            `json:"vuln_total"`
+	FixableTotal            int            `json:"fixable_total"`
 	FilteredTotal           int            `json:"filtered_total"`
 	BucketCounts            map[string]int `json:"bucket_counts"`
+	ProjectStats            []ProjectStat  `json:"project_stats"`
+}
+
+// ProjectStat is the fix-readiness of one project (a scanned dir that has at
+// least one vuln): how many vulns it has and how many of those have a fix.
+// Feeds the Mechanic modal's per-project selector and counts.
+type ProjectStat struct {
+	Dir          string `json:"dir"`
+	Ecosystem    string `json:"ecosystem,omitempty"`
+	VulnCount    int    `json:"vuln_count"`
+	FixableCount int    `json:"fixable_count"`
 }
 
 // VulnQuery controls grouping, ordering and pagination of an endpoint's
 // vulnerabilities. The backend owns all of it; the frontend only renders the
 // returned page. Limit <= 0 means "return every group" (used by the report).
 type VulnQuery struct {
-	Sort   string // "discovered" (newest first) or "exposure" (default)
-	Bucket string // exposure bucket filter: critical|high|medium|low ("" = all)
-	Q      string // substring match on canonical_id or aliases
-	Limit  int
-	Offset int
+	Sort    string // "discovered" (newest first) or "exposure" (default)
+	Bucket  string // exposure bucket filter: critical|high|medium|low ("" = all)
+	Project string // project dir filter: keep groups touching this dir ("" = all)
+	Q       string // substring match on canonical_id or aliases
+	Limit   int
+	Offset  int
 }
 
 // GetEndpointDetail returns one endpoint's full detail with every grouped
@@ -123,8 +137,10 @@ func (s *DB) GetEndpointDetailPage(ctx context.Context, id, tenantID string, q V
 	}
 
 	detail.BucketCounts = bucketCounts(all)
+	detail.ProjectStats = projectStats(all)
 	detail.VulnTotal = len(all)
-	filtered := filterVulns(all, q.Bucket, q.Q)
+	detail.FixableTotal = fixableTotal(all)
+	filtered := filterVulns(all, q.Bucket, q.Project, q.Q)
 	detail.FilteredTotal = len(filtered)
 	detail.Vulnerabilities = paginate(filtered, q.Offset, q.Limit)
 	return detail, nil
@@ -194,15 +210,90 @@ func bucketCounts(vulns []VulnGrouped) map[string]int {
 	return c
 }
 
-// filterVulns keeps groups matching the bucket and search query, preserving order.
-func filterVulns(all []VulnGrouped, bucket, query string) []VulnGrouped {
+// fixableTotal counts the endpoint's vulns that have a fix available anywhere
+// (any affected package with a fixed_version), deduplicated at the group level.
+func fixableTotal(vulns []VulnGrouped) int {
+	n := 0
+	for _, v := range vulns {
+		for _, p := range v.AffectedPackages {
+			if p.FixedVersion != "" {
+				n++
+				break
+			}
+		}
+	}
+	return n
+}
+
+// projectStats tallies, per project dir, how many of the endpoint's vulns touch
+// it and how many of those have a fix available in that dir. Only dirs with at
+// least one vuln appear.
+//
+// WHY: a vuln counts as fixable in dir D when a package found in D carries a
+// fixed_version — the same CVE may be fixable in one project and not in another,
+// so fix-readiness is measured per dir, not per group.
+func projectStats(vulns []VulnGrouped) []ProjectStat {
+	type acc struct {
+		ecosystem    string
+		vulnCount    int
+		fixableCount int
+	}
+	byDir := map[string]*acc{}
+
+	for _, v := range vulns {
+		// One entry per distinct dir this group touches, with whether the group
+		// has a fix in that dir.
+		fixableInDir := map[string]bool{}
+		ecoInDir := map[string]string{}
+		for _, p := range v.AffectedPackages {
+			for _, dir := range p.Dirs {
+				if p.FixedVersion != "" {
+					fixableInDir[dir] = true
+				} else if _, seen := fixableInDir[dir]; !seen {
+					fixableInDir[dir] = false
+				}
+				if ecoInDir[dir] == "" {
+					ecoInDir[dir] = p.Ecosystem
+				}
+			}
+		}
+		for dir, fixable := range fixableInDir {
+			a := byDir[dir]
+			if a == nil {
+				a = &acc{ecosystem: ecoInDir[dir]}
+				byDir[dir] = a
+			}
+			a.vulnCount++
+			if fixable {
+				a.fixableCount++
+			}
+		}
+	}
+
+	stats := make([]ProjectStat, 0, len(byDir))
+	for dir, a := range byDir {
+		stats = append(stats, ProjectStat{
+			Dir: dir, Ecosystem: a.ecosystem,
+			VulnCount: a.vulnCount, FixableCount: a.fixableCount,
+		})
+	}
+	sort.Slice(stats, func(i, j int) bool { return stats[i].Dir < stats[j].Dir })
+	return stats
+}
+
+// filterVulns keeps groups matching the bucket, project and search query,
+// preserving order.
+func filterVulns(all []VulnGrouped, bucket, project, query string) []VulnGrouped {
 	q := strings.ToLower(strings.TrimSpace(query))
-	if bucket == "" && q == "" {
+	if bucket == "" && project == "" && q == "" {
 		return all
 	}
 	out := make([]VulnGrouped, 0, len(all))
 	for _, v := range all {
 		if bucket != "" && v.ExposureBucket != bucket {
+			continue
+		}
+		if project != "" && !touchesProject(v, project) {
 			continue
 		}
 		if q != "" && !matchesQuery(v, q) {
@@ -211,6 +302,19 @@ func filterVulns(all []VulnGrouped, bucket, query string) []VulnGrouped {
 		out = append(out, v)
 	}
 	return out
+}
+
+// touchesProject reports whether any of the group's affected packages was found
+// in the given project directory.
+func touchesProject(v VulnGrouped, project string) bool {
+	for _, p := range v.AffectedPackages {
+		for _, dir := range p.Dirs {
+			if dir == project {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // matchesQuery reports whether a group's canonical id or any alias contains q
@@ -270,7 +374,7 @@ func deltaFromHistory(entries []HistoryEntry, days int) int {
 func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string, includeDetails bool) ([]VulnGrouped, error) {
 	orderBy := "MAX(ev.exposure_score) DESC"
 	if sort == "discovered" {
-		orderBy = "MAX(ev.discovered_at) DESC, MAX(ev.exposure_score) DESC"
+		orderBy = "MIN(NULLIF(ev.discovered_at, '')) DESC, MAX(ev.exposure_score) DESC"
 	}
 	// WHY: the list view never renders `details` (the full advisory markdown), so
 	// skip reading the blob there — it's the bulk of the payload. Only the report
@@ -304,7 +408,7 @@ func (s *DB) getEndpointVulns(ctx context.Context, endpointID, sort string, incl
 				'fixed_version', ev.fixed_version
 			)) AS packages,
 			MAX(ev.exposure_score) AS exposure_score,
-			MAX(ev.discovered_at)  AS discovered_at
+			MIN(NULLIF(ev.discovered_at, '')) AS discovered_at
 		FROM endpoint_vulnerabilities ev
 		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
 		WHERE ev.endpoint_id = ?

@@ -4,9 +4,12 @@ import "testing"
 
 func sampleVulns() []VulnGrouped {
 	return []VulnGrouped{
-		{CanonicalID: "CVE-2026-1", Aliases: []string{"GHSA-aaaa"}, ExposureBucket: "critical"},
-		{CanonicalID: "CVE-2026-2", Aliases: []string{"GHSA-bbbb"}, ExposureBucket: "high"},
-		{CanonicalID: "CVE-2026-3", Aliases: []string{"GHSA-cccc"}, ExposureBucket: "high"},
+		{CanonicalID: "CVE-2026-1", Aliases: []string{"GHSA-aaaa"}, ExposureBucket: "critical",
+			AffectedPackages: []AffectedPkg{{Dirs: []string{"/app/api"}}}},
+		{CanonicalID: "CVE-2026-2", Aliases: []string{"GHSA-bbbb"}, ExposureBucket: "high",
+			AffectedPackages: []AffectedPkg{{Dirs: []string{"/app/api", "/app/worker"}}}},
+		{CanonicalID: "CVE-2026-3", Aliases: []string{"GHSA-cccc"}, ExposureBucket: "high",
+			AffectedPackages: []AffectedPkg{{Dirs: []string{"/app/worker"}}}},
 		{CanonicalID: "CVE-2026-4", Aliases: []string{"GHSA-dddd"}, ExposureBucket: "low"},
 	}
 }
@@ -24,23 +27,35 @@ func TestBucketCounts(t *testing.T) {
 func TestFilterVulns(t *testing.T) {
 	all := sampleVulns()
 
-	if n := len(filterVulns(all, "", "")); n != 4 {
+	if n := len(filterVulns(all, "", "", "")); n != 4 {
 		t.Errorf("no filter: got %d, want 4", n)
 	}
-	if n := len(filterVulns(all, "high", "")); n != 2 {
+	if n := len(filterVulns(all, "high", "", "")); n != 2 {
 		t.Errorf("bucket=high: got %d, want 2", n)
 	}
 	// Query matches canonical id (case-insensitive).
-	if n := len(filterVulns(all, "", "cve-2026-2")); n != 1 {
+	if n := len(filterVulns(all, "", "", "cve-2026-2")); n != 1 {
 		t.Errorf("q=cve-2026-2: got %d, want 1", n)
 	}
 	// Query matches an alias.
-	if n := len(filterVulns(all, "", "ghsa-cccc")); n != 1 {
+	if n := len(filterVulns(all, "", "", "ghsa-cccc")); n != 1 {
 		t.Errorf("q=alias: got %d, want 1", n)
 	}
 	// Bucket + query combined.
-	if n := len(filterVulns(all, "low", "cve-2026-1")); n != 0 {
+	if n := len(filterVulns(all, "low", "", "cve-2026-1")); n != 0 {
 		t.Errorf("bucket=low q=cve-2026-1: got %d, want 0", n)
+	}
+	// Project keeps every group touching that dir (CVE-1 + CVE-2 share /app/api).
+	if n := len(filterVulns(all, "", "/app/api", "")); n != 2 {
+		t.Errorf("project=/app/api: got %d, want 2", n)
+	}
+	// Project + bucket combined: only CVE-2 is high AND in /app/api.
+	if n := len(filterVulns(all, "high", "/app/api", "")); n != 1 {
+		t.Errorf("project=/app/api bucket=high: got %d, want 1", n)
+	}
+	// Unknown project matches nothing.
+	if n := len(filterVulns(all, "", "/nope", "")); n != 0 {
+		t.Errorf("project=/nope: got %d, want 0", n)
 	}
 }
 

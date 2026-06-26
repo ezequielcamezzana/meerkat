@@ -33,9 +33,11 @@ func handleEndpointReport(database *db.DB) http.HandlerFunc {
 		slug := reportSlug(detail.Hostname)
 		switch r.URL.Query().Get("kind") {
 		case "fix":
+			// project ("" = all) scopes the prompt to a single project dir.
+			project := r.URL.Query().Get("project")
 			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 			w.Header().Set("Content-Disposition", `attachment; filename="meerkat-fix-`+slug+`.md"`)
-			w.Write([]byte(buildFixReport(detail)))
+			w.Write([]byte(buildFixReport(detail, project)))
 		default:
 			w.Header().Set("Content-Disposition", `attachment; filename="meerkat-audit-`+slug+`.json"`)
 			writeJSON(w, http.StatusOK, buildAuditReport(detail))
@@ -60,8 +62,9 @@ func buildAuditReport(d *db.EndpointDetail) map[string]any {
 }
 
 // buildFixReport renders an LLM-ready remediation prompt, grouped by project
-// directory (an agent fixes one project at a time).
-func buildFixReport(d *db.EndpointDetail) string {
+// directory (an agent fixes one project at a time). When project is non-empty,
+// only that dir's section is emitted.
+func buildFixReport(d *db.EndpointDetail, project string) string {
 	type fixLine struct {
 		name, version, fixed, cve, bucket string
 		severity                          float64
@@ -76,6 +79,9 @@ func buildFixReport(d *db.EndpointDetail) string {
 				dirs = []string{"(unknown directory)"}
 			}
 			for _, dir := range dirs {
+				if project != "" && dir != project {
+					continue
+				}
 				byDir[dir] = append(byDir[dir], fixLine{
 					name: p.Name, version: p.Version, fixed: p.FixedVersion,
 					cve: v.CanonicalID, bucket: v.ExposureBucket, severity: v.SeverityScore,
