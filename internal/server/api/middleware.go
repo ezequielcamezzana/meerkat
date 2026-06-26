@@ -107,6 +107,12 @@ func sessionMiddleware(database *db.DB) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Sliding renewal: re-issue the cookie on each authenticated request so
+			// an active session never hits the hard TTL — only real inactivity expires it.
+			if token, err := auth.Sign(tenantID, role, secret, sessionTTL); err == nil {
+				setSessionCookie(w, token)
+			}
+
 			ctx := context.WithValue(r.Context(), tenantIDKey, tenantID)
 			ctx = context.WithValue(ctx, roleKey, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
