@@ -53,7 +53,7 @@ func openTestDB2(t *testing.T) (*db.DB, error) {
 func setupRouterWith(t *testing.T, database *db.DB, ing *ingest.Ingest) http.Handler {
 	t.Helper()
 	cfg := &config.Config{CORSAllowedOrigins: []string{"*"}}
-	return serverapi.NewRouter(database, ing, cfg)
+	return serverapi.NewRouter(database, ing, cfg, "dev")
 }
 
 func setupRouterDefault(t *testing.T, database *db.DB) http.Handler {

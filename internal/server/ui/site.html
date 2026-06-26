@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>meerkat — SBOM-as-fingerprint for your fleet</title>
+        <meta
+            name="description"
+            content="meerkat scans your fleet's dependencies, matches them against known vulnerabilities, and answers 'which machines have this CVE?' in seconds."
+        />
+        <link rel="icon" type="image/png" href="/app/assets/favicon.ico" />
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            button,
+            input {
+                font-family: inherit;
+            }
+            :focus-visible {
+                outline: 2px solid var(--charcoal);
+                outline-offset: 1px;
+            }
+
+            :root {
+                --primary: #000000;
+                --on-primary: #ffffff;
+                --ink: #000000;
+                --charcoal: #525252;
+                --body: #737373;
+                --mute: #a3a3a3;
+                --canvas: #ffffff;
+                --surface-soft: #fafafa;
+                --surface-dark: #171717;
+                --hairline: #e5e5e5;
+                --hairline-strong: #d4d4d4;
+                --on-dark: #ffffff;
+                --on-dark-mute: rgba(255, 255, 255, 0.7);
+
+                --radius-full: 9999px;
+                --radius-lg: 12px;
+                --radius-sm: 6px;
+            }
+
+            body {
+                font-family:
+                    ui-sans-serif,
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                font-size: 16px;
+                line-height: 1.5;
+                color: var(--ink);
+                background: var(--canvas);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* Nav — identity + the single App action, no in-page routing. */
+            nav {
+                height: 56px;
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                background: var(--canvas);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 32px;
+            }
+            nav .brand {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--ink);
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+            }
+            nav .brand img {
+                height: 45px;
+                width: 45px;
+                object-fit: contain;
+                vertical-align: middle;
+                margin-right: 6px;
+            }
+
+            /* Button */
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 16px;
+                height: 32px;
+                border-radius: var(--radius-full);
+                font-size: 13px;
+                font-weight: 500;
+                line-height: 1;
+                cursor: pointer;
+                border: 1px solid var(--hairline-strong);
+                background: var(--canvas);
+                color: var(--ink);
+                text-decoration: none;
+            }
+            .btn:hover {
+                border-color: var(--ink);
+            }
+            .btn svg {
+                width: 15px;
+                height: 15px;
+                flex-shrink: 0;
+            }
+            .btn-primary {
+                background: var(--primary);
+                color: var(--on-primary);
+                border-color: var(--primary);
+            }
+            .btn-primary:hover {
+                background: #090909;
+                border-color: #090909;
+            }
+            .btn-lg {
+                height: 38px;
+                padding: 0 20px;
+                font-size: 14px;
+            }
+
+            /* Layout — single narrow reading column. */
+            main {
+                width: 100%;
+                max-width: 860px;
+                margin: 0 auto;
+                padding: 72px 32px 96px;
+                flex: 1 0 auto;
+            }
+            section + section {
+                margin-top: 64px;
+            }
+            h1 {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 40px;
+                font-weight: 600;
+                line-height: 1.15;
+                letter-spacing: -0.01em;
+                color: var(--ink);
+            }
+            h2 {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 22px;
+                font-weight: 600;
+                color: var(--ink);
+                margin-bottom: 16px;
+            }
+            h3 {
+                font-family:
+                    ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--ink);
+            }
+            p {
+                color: var(--body);
+            }
+            a.link {
+                color: var(--ink);
+                text-decoration: underline;
+                text-underline-offset: 3px;
+            }
+            code {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.9em;
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-sm);
+                padding: 1px 5px;
+                color: var(--ink);
+            }
+
+            /* Hero */
+            .hero-tag {
+                font-style: italic;
+                font-size: 14px;
+                color: var(--mute);
+                margin-bottom: 16px;
+            }
+            .hero-lede {
+                font-size: 18px;
+                line-height: 1.55;
+                color: var(--body);
+                margin-top: 20px;
+                max-width: 620px;
+            }
+            .hero-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                margin-top: 32px;
+            }
+
+            /* Status pill */
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 3px 11px;
+                border-radius: var(--radius-full);
+                font-size: 12px;
+                font-weight: 500;
+                border: 1px solid var(--hairline);
+                color: var(--charcoal);
+                background: var(--surface-soft);
+            }
+            .pill .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: var(--radius-full);
+                background: var(--charcoal);
+            }
+
+            /* Cards */
+            .card {
+                background: var(--canvas);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-lg);
+                padding: 20px;
+            }
+            .card p {
+                font-size: 14px;
+                margin-top: 8px;
+            }
+            .grid-2 {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+            }
+            .card-head {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .card-kicker {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 11px;
+                color: var(--mute);
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+            }
+
+            /* Flow — numbered steps */
+            .flow {
+                list-style: none;
+                counter-reset: step;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                margin-top: 4px;
+            }
+            .flow li {
+                counter-increment: step;
+                display: flex;
+                gap: 14px;
+                padding: 12px 0;
+                border-bottom: 1px solid var(--hairline);
+                font-size: 14px;
+                color: var(--charcoal);
+            }
+            .flow li:last-child {
+                border-bottom: none;
+            }
+            .flow li::before {
+                content: counter(step);
+                flex-shrink: 0;
+                width: 24px;
+                height: 24px;
+                border-radius: var(--radius-full);
+                border: 1px solid var(--hairline-strong);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--charcoal);
+            }
+            .flow b {
+                color: var(--ink);
+                font-weight: 600;
+            }
+
+            /* Table */
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-lg);
+                overflow: hidden;
+            }
+            th,
+            td {
+                text-align: left;
+                padding: 11px 16px;
+                border-bottom: 1px solid var(--hairline);
+            }
+            th {
+                font-size: 11px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--mute);
+                background: var(--surface-soft);
+            }
+            tr:last-child td {
+                border-bottom: none;
+            }
+            td:first-child {
+                font-weight: 500;
+                color: var(--ink);
+            }
+            td.mono,
+            th.mono {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                color: var(--charcoal);
+            }
+
+            /* Status columns */
+            .status-cols {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+            }
+            .status-list {
+                list-style: none;
+                display: flex;
+                flex-direction: column;
+                gap: 9px;
+                margin-top: 12px;
+                font-size: 14px;
+                color: var(--charcoal);
+            }
+            .status-list li {
+                display: flex;
+                gap: 9px;
+                align-items: baseline;
+            }
+            .status-list .mk {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                color: var(--mute);
+                flex-shrink: 0;
+            }
+
+            /* Demo block */
+            .demo {
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius-lg);
+                padding: 24px;
+            }
+            .key-row {
+                display: flex;
+                gap: 8px;
+                align-items: stretch;
+                margin-top: 14px;
+                flex-wrap: wrap;
+            }
+            .key-code {
+                flex: 1;
+                min-width: 240px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 13px;
+                color: var(--ink);
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-full);
+                padding: 0 16px;
+                display: flex;
+                align-items: center;
+                overflow-x: auto;
+                white-space: nowrap;
+                user-select: all;
+            }
+            .demo-note {
+                font-size: 12px;
+                color: var(--mute);
+                margin-top: 12px;
+            }
+
+            /* Footer — meta left, GitHub/Docs/Install right. */
+            .footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 20px 32px;
+                font-size: 13px;
+                color: var(--body);
+            }
+            .footer-meta {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                color: var(--mute);
+            }
+            .footer-links {
+                display: inline-flex;
+                align-items: center;
+                gap: 16px;
+            }
+            .icon-link {
+                color: var(--mute);
+                display: inline-flex;
+                align-items: center;
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+            }
+            .icon-link:hover {
+                color: var(--ink);
+            }
+            .icon-link svg {
+                width: 20px;
+                height: 20px;
+                display: block;
+            }
+
+            /* Install popover */
+            .install-wrap {
+                position: relative;
+                display: inline-flex;
+            }
+            .install-pop {
+                position: absolute;
+                bottom: calc(100% + 10px);
+                right: 0;
+                width: min(330px, 80vw);
+                background: var(--canvas);
+                border: 1px solid var(--hairline-strong);
+                border-radius: var(--radius-lg);
+                padding: 14px;
+                text-align: left;
+                z-index: 50;
+            }
+            .install-pop[hidden] {
+                display: none;
+            }
+            .install-pop-label {
+                font-size: 12px;
+                color: var(--mute);
+                margin-bottom: 8px;
+            }
+            .install-cmd {
+                display: block;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 12px;
+                color: var(--ink);
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                border-radius: var(--radius-sm);
+                padding: 8px 10px;
+                overflow-x: auto;
+                white-space: nowrap;
+                user-select: all;
+            }
+            .install-pop-actions {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-top: 10px;
+            }
+            .install-pop-link {
+                font-size: 12px;
+                color: var(--body);
+                text-decoration: none;
+                white-space: nowrap;
+            }
+            .install-pop-link:hover {
+                color: var(--ink);
+                text-decoration: underline;
+            }
+
+            @media (max-width: 640px) {
+                main {
+                    padding: 48px 20px 72px;
+                }
+                nav,
+                .footer {
+                    padding-left: 20px;
+                    padding-right: 20px;
+                }
+                h1 {
+                    font-size: 32px;
+                }
+                .grid-2,
+                .status-cols {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <a class="brand" href="/">
+                <img src="/app/assets/meerkat-icon.png" alt="" />meerkat
+            </a>
+            <a class="btn btn-primary" href="/app">App</a>
+        </nav>
+
+        <main>
+            <!-- Hero -->
+            <section>
+                <p class="hero-tag">the colony watches its own</p>
+                <h1>SBOM-as-fingerprint for&nbsp;your&nbsp;fleet.</h1>
+                <p class="hero-lede">
+                    meerkat scans every machine's dependencies, matches them
+                    against known vulnerabilities, and answers
+                    <em>"which machines have this CVE?"</em> in seconds.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn btn-primary btn-lg" href="#demo">Try the live demo</a>
+                    <a
+                        class="btn btn-lg"
+                        href="https://github.com/ezequielcamezzana/meerkat"
+                        target="_blank"
+                        rel="noopener"
+                        >GitHub</a
+                    >
+                </div>
+            </section>
+
+            <!-- What it is -->
+            <section>
+                <h2>What it is</h2>
+                <p>
+                    A single binary runs on each machine, inventories the
+                    software dependencies it finds, and ships that inventory to
+                    a central server. The server matches every package against
+                    <a class="link" href="https://osv.dev" target="_blank" rel="noopener">OSV</a>,
+                    records which machines are affected, and exposes a dashboard.
+                    When a new CVE drops, you already know who's exposed.
+                </p>
+                <p style="margin-top: 12px">
+                    Inspired by how meerkat colonies work: every member scouts
+                    its surroundings and alerts the group, while a sentinel keeps
+                    the collective view.
+                </p>
+            </section>
+
+            <!-- The two actors -->
+            <section>
+                <h2>The two actors</h2>
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-head">
+                            <span class="card-kicker">client</span>
+                            <h3>Scout</h3>
+                        </div>
+                        <p>
+                            <code>meerkat scan</code> on a machine walks the
+                            filesystem, detects projects from lock files, builds
+                            an inventory of dependencies, and uploads it. Runs
+                            once or on a schedule.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="card-head">
+                            <span class="card-kicker">server</span>
+                            <h3>Mob</h3>
+                        </div>
+                        <p>
+                            <code>meerkat server</code> receives inventories,
+                            matches against OSV, stores everything in SQLite,
+                            emails alerts on new vulns, and re-matches offline
+                            machines against fresh data.
+                        </p>
+                    </div>
+                </div>
+                <p style="font-size: 13px; margin-top: 14px">
+                    The server never reads filesystems; the client never matches
+                    vulnerabilities. They talk over one HTTP endpoint with a
+                    bearer <b style="color: var(--ink)">API key</b>.
+                </p>
+            </section>
+
+            <!-- How it works -->
+            <section>
+                <h2>How it works</h2>
+                <ol class="flow">
+                    <li>
+                        <span
+                            ><b>Walk &amp; scan.</b> The client detects projects
+                            from lock files and runs Syft on each, with a
+                            content-hash cache so repeat scans are fast.</span
+                        >
+                    </li>
+                    <li>
+                        <span
+                            ><b>Upload.</b> The deduped inventory is POSTed with
+                            the bearer key; on network failure it queues to disk
+                            and drains later.</span
+                        >
+                    </li>
+                    <li>
+                        <span
+                            ><b>Match.</b> The server queries OSV per PURL,
+                            groups by canonical CVE, and computes a CVSS-derived
+                            exposure score.</span
+                        >
+                    </li>
+                    <li>
+                        <span
+                            ><b>Alert.</b> When an endpoint gains a
+                            <em>new</em> vulnerability, the affected fleet gets an
+                            email.</span
+                        >
+                    </li>
+                    <li>
+                        <span
+                            ><b>Passive rematch.</b> A timer re-evaluates
+                            powered-off machines against current OSV data, so
+                            they're flagged even while offline.</span
+                        >
+                    </li>
+                </ol>
+            </section>
+
+            <!-- What it scans -->
+            <section>
+                <h2>What it scans</h2>
+                <p style="margin-bottom: 16px; font-size: 14px">
+                    Project-tier dependencies, resolved from lock files:
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ecosystem</th>
+                            <th class="mono">Detected from</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>npm</td>
+                            <td class="mono">
+                                package-lock.json · yarn.lock · pnpm-lock.yaml
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>PyPI</td>
+                            <td class="mono">
+                                poetry.lock · Pipfile.lock · uv.lock
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Cargo</td>
+                            <td class="mono">Cargo.lock</td>
+                        </tr>
+                        <tr>
+                            <td>Go</td>
+                            <td class="mono">go.sum</td>
+                        </tr>
+                        <tr>
+                            <td>Conan (C/C++)</td>
+                            <td class="mono">conan.lock · conanfile.txt/.py</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Development status -->
+            <section>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px">
+                    <h2 style="margin-bottom: 0">Development status</h2>
+                    <span class="pill"><span class="dot"></span>alpha</span>
+                </div>
+                <p style="font-size: 14px">
+                    meerkat is alpha and built for research. It works and is
+                    useful today, but the scope is intentionally narrow and the
+                    data model still moves. It scans project dependencies only —
+                    not yet everything you'd expect from a production-grade
+                    security tool.
+                </p>
+                <div class="status-cols" style="margin-top: 20px">
+                    <div>
+                        <h3>Today</h3>
+                        <ul class="status-list">
+                            <li><span class="mk">+</span> Lock-file dependency scanning (5 ecosystems)</li>
+                            <li><span class="mk">+</span> OSV matching with canonical-CVE grouping</li>
+                            <li><span class="mk">+</span> CVSS-derived exposure scoring</li>
+                            <li><span class="mk">+</span> Email alerts &amp; passive rematch</li>
+                            <li><span class="mk">+</span> Dashboard + JSON API, macOS &amp; Linux</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>On the way</h3>
+                        <ul class="status-list">
+                            <li><span class="mk">~</span> System packages (dpkg / rpm / apk)</li>
+                            <li><span class="mk">~</span> Global installs (brew, npm -g)</li>
+                            <li><span class="mk">~</span> Windows support</li>
+                            <li><span class="mk">~</span> Deeper C/C++ + Conan coverage</li>
+                            <li><span class="mk">~</span> Daily full-machine scanning</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live demo -->
+            <section id="demo">
+                <h2>Try the live demo</h2>
+                <div class="demo">
+                    <p style="font-size: 14px">
+                        A hosted instance with
+                        <b style="color: var(--ink)">synthetic data</b> — a fake
+                        fleet built from sample lock files — is up so you can try
+                        the dashboard without installing anything. Sign in with
+                        this read-only key:
+                    </p>
+                    <div class="key-row">
+                        <span class="key-code" id="demo-key"
+                            >mk_XduLgOubsKHYZMfQy0ERYAri8P2jl54u</span
+                        >
+                        <button class="btn" type="button" onclick="copyKey(this)">
+                            Copy
+                        </button>
+                        <a
+                            class="btn btn-primary"
+                            href="https://meerkat.camecorp.lat/"
+                            target="_blank"
+                            rel="noopener"
+                            >Open demo →</a
+                        >
+                    </div>
+                    <p class="demo-note">
+                        Guest, read-only: browse everything, but writes are
+                        blocked. All data is synthetic — nothing here is a real
+                        machine.
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span class="footer-meta" id="footer-meta">meerkat · dev</span>
+            <span class="footer-links">
+                <a
+                    class="icon-link"
+                    href="https://github.com/ezequielcamezzana/meerkat"
+                    target="_blank"
+                    rel="noopener"
+                    title="GitHub"
+                    aria-label="GitHub"
+                >
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path
+                            d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .1.8 1.6 2.6 1.4.1-.7.4-1.2.7-1.5-2.5-.3-5.1-1.3-5.1-5.6 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-2.9 0 0 .9-.3 3 1.1.9-.2 1.8-.4 2.7-.4.9 0 1.8.1 2.7.4 2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.6.1 2.9.7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.3-5.1 5.6.4.3.8 1 .8 2.1v3.1c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"
+                        />
+                    </svg>
+                </a>
+                <a
+                    class="icon-link"
+                    href="https://github.com/ezequielcamezzana/meerkat/tree/main/docs"
+                    target="_blank"
+                    rel="noopener"
+                    title="Docs"
+                    aria-label="Docs"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M2 4h7a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z" />
+                        <path d="M22 4h-7a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z" />
+                    </svg>
+                </a>
+                <span class="install-wrap">
+                    <button
+                        class="icon-link"
+                        type="button"
+                        title="Install"
+                        aria-label="Install"
+                        onclick="toggleInstall(event)"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                    </button>
+                    <div class="install-pop" hidden>
+                        <div class="install-pop-label">Install — macOS / Linux</div>
+                        <code class="install-cmd"
+                            >curl -fsSL
+                            https://raw.githubusercontent.com/ezequielcamezzana/meerkat/main/install.sh
+                            | sh</code
+                        >
+                        <div class="install-pop-actions">
+                            <button class="btn" type="button" onclick="copyInstall(this)">
+                                Copy
+                            </button>
+                            <a
+                                class="install-pop-link"
+                                href="https://github.com/ezequielcamezzana/meerkat/releases"
+                                target="_blank"
+                                rel="noopener"
+                                >or download binaries →</a
+                            >
+                        </div>
+                    </div>
+                </span>
+            </span>
+        </footer>
+
+        <script>
+            document.getElementById("footer-meta").textContent =
+                `meerkat · dev · ${new Date().getFullYear()}`;
+
+            function copyText(text, btn) {
+                navigator.clipboard
+                    .writeText(text)
+                    .then(() => {
+                        const prev = btn.textContent;
+                        btn.textContent = "Copied";
+                        setTimeout(() => (btn.textContent = prev), 1500);
+                    })
+                    .catch(() => {}); // clipboard blocked → user can select it
+            }
+
+            function copyKey(btn) {
+                copyText(
+                    document.getElementById("demo-key").textContent.trim(),
+                    btn,
+                );
+            }
+
+            function copyInstall(btn) {
+                copyText(
+                    btn
+                        .closest(".install-pop")
+                        .querySelector(".install-cmd")
+                        .textContent.trim()
+                        .replace(/\s+/g, " "),
+                    btn,
+                );
+            }
+
+            function toggleInstall(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const pop =
+                    e.currentTarget.parentElement.querySelector(".install-pop");
+                pop.hidden = !pop.hidden;
+            }
+
+            document.addEventListener("click", (e) => {
+                if (!e.target.closest(".install-wrap")) {
+                    document
+                        .querySelectorAll(".install-pop")
+                        .forEach((p) => (p.hidden = true));
+                }
+            });
+        </script>
+    </body>
+</html>

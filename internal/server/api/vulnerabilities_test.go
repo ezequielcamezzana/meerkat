@@ -65,7 +65,7 @@ func setupSeededVulnRouter(t *testing.T) (http.Handler, *http.Cookie) {
 	}
 	ing := ingest.New(database, mock, &notifier.NoopNotifier{}, "")
 	cfg := &config.Config{CORSAllowedOrigins: []string{"*"}}
-	router := serverapi.NewRouter(database, ing, cfg)
+	router := serverapi.NewRouter(database, ing, cfg, "dev")
 	cookie := sessionCookie(t, database, tenant.ID)
 
 	seedEndpointWith(t, router, apiToken, "ep-vuln", []meerkatapi.Package{

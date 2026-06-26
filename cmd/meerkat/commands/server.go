@@ -64,7 +64,7 @@ func NewServerCmd() *cobra.Command {
 				})
 			}
 			ing := ingest.New(database, osv, emailNotifier, cfg.BaseURL)
-			router := serverapi.NewRouter(database, ing, cfg)
+			router := serverapi.NewRouter(database, ing, cfg, Version)
 
 			// Passive scanning: re-match stale endpoints against fresh OSV data.
 			rematcher := rematch.New(database, ing, cfg.RematchInterval, cfg.RematchBatch)

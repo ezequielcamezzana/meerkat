@@ -31,6 +31,9 @@ type Config struct {
 	CORSAllowedOrigins   []string
 	RematchInterval      time.Duration
 	RematchBatch         int
+	// MagpieURL, when set, turns every rendered PURL into a link to Magpie's
+	// collect view. Empty disables the feature.
+	MagpieURL string
 }
 
 func Load() (*Config, error) {
@@ -50,6 +53,7 @@ func Load() (*Config, error) {
 		NotifyFrom:           os.Getenv("MEERKAT_NOTIFY_FROM"),
 		NotifyFromName:       envOr("MEERKAT_NOTIFY_FROM_NAME", "meerkat"),
 		HistoryRetentionDays: envInt("MEERKAT_HISTORY_RETENTION_DAYS", 30),
+		MagpieURL:            strings.TrimRight(os.Getenv("MEERKAT_MAGPIE_URL"), "/"),
 	}
 
 	cfg.OSVTimeout = envDuration("MEERKAT_OSV_TIMEOUT", 30*time.Second)

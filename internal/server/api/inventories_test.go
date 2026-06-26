@@ -39,7 +39,7 @@ func setupRouter(t *testing.T) (http.Handler, *db.DB, string) {
 
 	ing := ingest.New(database, &matcher.NoopMatcher{}, &notifier.NoopNotifier{}, "")
 	cfg := &config.Config{CORSAllowedOrigins: []string{"*"}}
-	router := serverapi.NewRouter(database, ing, cfg)
+	router := serverapi.NewRouter(database, ing, cfg, "dev")
 	return router, database, token
 }
 
@@ -115,7 +115,7 @@ func TestPostInventory_NoTokenConfigured(t *testing.T) {
 
 	ing := ingest.New(database, &matcher.NoopMatcher{}, &notifier.NoopNotifier{}, "")
 	cfg := &config.Config{CORSAllowedOrigins: []string{"*"}}
-	router := serverapi.NewRouter(database, ing, cfg)
+	router := serverapi.NewRouter(database, ing, cfg, "dev")
 
 	body, _ := json.Marshal(validInventory())
 	req := httptest.NewRequest(http.MethodPost, "/v1/inventories", bytes.NewReader(body))

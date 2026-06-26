@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Handler {
+func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config, version string) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -25,6 +25,11 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 	r.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 
 	indexHTML, _ := ui.FS.ReadFile("index.html")
+	siteHTML, _ := ui.FS.ReadFile("site.html")
+	// The embedded HTML hardcodes "dev"; stamp the real build version in so the
+	// footer matches the binary's ldflags version.
+	indexHTML = injectVersion(indexHTML, version)
+	siteHTML = injectVersion(siteHTML, version)
 	assetServer := http.StripPrefix("/app", http.FileServer(http.FS(ui.FS)))
 	serveApp := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -33,7 +38,8 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 
 	// Public routes — no auth.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/app", http.StatusMovedPermanently)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(siteHTML)
 	})
 	r.Handle("/app/assets/*", assetServer)
 	r.Get("/app/login", serveApp)
@@ -58,7 +64,7 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 	// API reads — authenticated by session cookie.
 	r.Group(func(r chi.Router) {
 		r.Use(sessionMiddleware(database))
-		r.Get("/v1/session", handleSession())
+		r.Get("/v1/session", handleSession(cfg))
 		r.Get("/v1/endpoints", handleListEndpoints(database))
 		r.Get("/v1/endpoints/{id}", handleGetEndpoint(database))
 		r.Get("/v1/endpoints/{id}/history", handleGetEndpointHistory(database))
@@ -71,6 +77,19 @@ func NewRouter(database *db.DB, ing *ingest.Ingest, cfg *config.Config) http.Han
 	})
 
 	return r
+}
+
+// injectVersion stamps the build version into the embedded HTML, replacing the
+// "dev" placeholders in the app footer (index.html) and site footer (site.html).
+func injectVersion(html []byte, version string) []byte {
+	if version == "" {
+		version = "dev"
+	}
+	version = strings.ReplaceAll(version, `"`, "")
+	s := string(html)
+	s = strings.ReplaceAll(s, `MEERKAT_VERSION = "dev"`, `MEERKAT_VERSION = "`+version+`"`)
+	s = strings.ReplaceAll(s, "meerkat · dev", "meerkat · "+version)
+	return []byte(s)
 }
 
 func handleHealthz(database *db.DB) http.HandlerFunc {

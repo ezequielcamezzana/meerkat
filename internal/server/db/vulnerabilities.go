@@ -282,6 +282,7 @@ type AffectedEndpoint struct {
 	Hostname       string  `json:"hostname"`
 	OS             string  `json:"os"`
 	ExposureScore  float64 `json:"exposure_score"`
+	Purl           string  `json:"purl"`
 	PackageName    string  `json:"package_name"`
 	PackageVersion string  `json:"package_version"`
 	FixedVersion   string  `json:"fixed_version,omitempty"`
@@ -340,7 +341,7 @@ func (s *DB) GetTenantVulnDetail(ctx context.Context, tenantID, canonicalID stri
 
 	rows, err := s.conn.QueryContext(ctx, `
 		SELECT e.id, e.hostname, e.os, ev.exposure_score,
-		       ev.package_name, ev.package_version, ev.fixed_version
+		       ev.purl, ev.package_name, ev.package_version, ev.fixed_version
 		FROM endpoint_vulnerabilities ev
 		JOIN vulnerabilities v ON v.id = ev.vulnerability_id
 		JOIN endpoints e ON e.id = ev.endpoint_id
@@ -357,7 +358,7 @@ func (s *DB) GetTenantVulnDetail(ctx context.Context, tenantID, canonicalID stri
 		var a AffectedEndpoint
 		if err := rows.Scan(
 			&a.EndpointID, &a.Hostname, &a.OS, &a.ExposureScore,
-			&a.PackageName, &a.PackageVersion, &a.FixedVersion,
+			&a.Purl, &a.PackageName, &a.PackageVersion, &a.FixedVersion,
 		); err != nil {
 			return nil, err
 		}
