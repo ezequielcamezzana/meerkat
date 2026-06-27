@@ -91,6 +91,7 @@ Full walkthroughs:
 | `meerkat config show \| get \| set \| reset` | client | Inspect / edit / wipe the config |
 | `meerkat service start \| stop \| status` | client | Schedule automatic scans (crontab) |
 | `meerkat cache info \| clear` | client | Inspect / clear the scan cache |
+| `meerkat update` | client | Update to the latest release (`--check` to only report) |
 | `meerkat server` | server | Run the HTTP server (foreground) |
 | `meerkat key create \| guest \| list \| revoke` | server | Manage API keys & tenants (`guest` = read-only key) |
 | `meerkat migrate` | server | Apply DB migrations manually (idempotent) |

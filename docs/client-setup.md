@@ -11,6 +11,8 @@ meerkat version
 
 The installer detects your OS/arch (macOS/Linux, amd64/arm64) and drops the binary in `/usr/local/bin` (override with `INSTALL_DIR`). Or grab a binary manually from the [Releases](https://github.com/ezequielcamezzana/meerkat/releases) page.
 
+To upgrade later, run `meerkat update` — it checks the latest release and reuses the same installer (a no-op if you're already current; `meerkat update --check` only reports).
+
 ## 2. Configure
 
 ### Interactive
