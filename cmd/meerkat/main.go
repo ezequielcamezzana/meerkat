@@ -32,6 +32,7 @@ func main() {
 		commands.NewServerCmd(),
 		commands.NewMigrateCmd(),
 		commands.NewKeyCmd(),
+		commands.NewUpdateCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
