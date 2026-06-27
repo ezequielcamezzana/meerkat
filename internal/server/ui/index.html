@@ -483,13 +483,16 @@
             .vuln-dates .vm-k {
                 color: var(--mute);
             }
-            /* Inline discovered/updated dates in the global vuln list row */
+            /* Discovered/updated dates stacked vertically in the global vuln list
+               row, so the header has room for the exposure + CVSS pills. */
             .gv-row-dates {
                 display: flex;
-                gap: 14px;
+                flex-direction: column;
+                gap: 2px;
                 font-size: 11px;
                 color: var(--charcoal);
                 white-space: nowrap;
+                text-align: right;
             }
             .gv-row-dates .vm-k {
                 color: var(--mute);
@@ -699,6 +702,14 @@
                 background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23737373' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
                 background-repeat: no-repeat;
                 background-position: right 14px center;
+            }
+            /* Fixed width so the filter bar doesn't stretch to the widest project
+               path. The label is tail-truncated in JS (keeping the project name at
+               the end), so no CSS ellipsis here — that would clip the wrong end. */
+            .vuln-project-select {
+                width: 240px;
+                white-space: nowrap;
+                overflow: hidden;
             }
             .modal-overlay {
                 position: fixed;
@@ -958,6 +969,38 @@
                 gap: 8px;
                 flex-wrap: wrap;
             }
+            .endpoint-os-line {
+                font-size: 12px;
+                color: var(--mute);
+                margin-top: 2px;
+            }
+            .endpoint-pkgs {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                margin-top: 6px;
+            }
+            .endpoint-pkg {
+                font-size: 12px;
+                color: var(--mute);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+            .fix-label {
+                font-size: 11px;
+                color: var(--mute);
+            }
+            .fix-pill {
+                font-size: 11px;
+                padding: 1px 8px;
+                border-radius: var(--radius-full);
+                background: var(--surface-soft);
+                border: 1px solid var(--hairline);
+                color: var(--charcoal);
+                white-space: nowrap;
+            }
 
             /* Tag pills */
             .tag {
@@ -1140,6 +1183,12 @@
                 margin-bottom: 16px;
                 gap: 12px;
                 flex-wrap: wrap;
+            }
+            /* The endpoints list sits straight in <main>, unlike the other views
+               which are wrapped in .ep-page (32px top). Match that top so the
+               page title lines up across views. */
+            .section-header--list {
+                padding-top: 32px;
             }
             .count-label {
                 font-size: 13px;
@@ -1585,7 +1634,7 @@
                 </div>
             </div>
 
-            <div class="section-header">
+            <div class="section-header section-header--list">
                 <h1>
                     Endpoints <span id="count-label" class="count-label"></span>
                 </h1>
@@ -2307,14 +2356,31 @@
                 updateVulnList();
             }
 
-            // A project's dir shown relative to scan_root: short, but still
-            // disambiguates same-named dirs in different locations (the value
-            // sent to the backend stays the absolute dir for an exact match).
+            // A project's dir shown relative to scan_root and tail-truncated: the
+            // meaningful part (the project name) is at the end, so we keep the tail
+            // and elide the front. The value sent to the backend stays the absolute
+            // dir for an exact match.
             function projectLabel(dir, root) {
-                if (dir === root) return ".";
-                if (root && dir.startsWith(root + "/"))
-                    return dir.slice(root.length + 1);
-                return dir;
+                let label = dir;
+                if (dir === root) label = ".";
+                else if (root && dir.startsWith(root + "/"))
+                    label = dir.slice(root.length + 1);
+                return truncateTail(label, 28);
+            }
+
+            // Keeps the last whole segments of a path-like string within max chars,
+            // marking the elision with "…/". A single oversized tail segment is
+            // hard-cut from the front.
+            function truncateTail(s, max) {
+                if (s.length <= max) return s;
+                const segs = s.split("/");
+                let out = segs[segs.length - 1];
+                if (out.length >= max) return "…" + out.slice(out.length - max + 1);
+                for (let i = segs.length - 2; i >= 0; i--) {
+                    if (out.length + segs[i].length + 3 > max) break; // +3 for "…/" and "/"
+                    out = segs[i] + "/" + out;
+                }
+                return "…/" + out;
             }
 
             // Builds the <select> for the project filter from project_stats — the
@@ -2334,7 +2400,7 @@
                             `<option value="${esc(p.dir)}"${vpProject === p.dir ? " selected" : ""}>${esc(p.label)}</option>`,
                     )
                     .join("");
-                return `<select class="vuln-bucket-select" onchange="setVulnProject(this.value)">
+                return `<select class="vuln-bucket-select vuln-project-select" onchange="setVulnProject(this.value)">
                     <option value="">All projects</option>
                     ${opts}
                 </select>`;
@@ -2831,7 +2897,7 @@
                 document.getElementById("vulns-page").innerHTML = `
 <div class="ep-page">
     <div class="section-header">
-        <h1>Vulnerabilities <span class="count-label">${gvTotal}</span></h1>
+        <h1>Vulnerabilities <span class="count-label">(${gvTotal})</span></h1>
     </div>
     <div class="vuln-filter-bar">
         <div class="vuln-filter-left">
@@ -2913,7 +2979,7 @@
                 const sev =
                     v.severity_score > 0 ? v.severity_score.toFixed(1) : null;
                 const cvssChip = sev
-                    ? `<span class="vuln-pkg-count">CVSS ${sev}</span>`
+                    ? `<span class="bucket-badge bucket-${v.cvss_bucket}">CVSS · ${sev} · ${v.cvss_bucket}</span>`
                     : "";
                 const aliases = (v.aliases || [])
                     .map(
@@ -3009,23 +3075,35 @@
             function renderAffectedEndpoint(e) {
                 const exp =
                     e.exposure_score > 0
-                        ? `<span class="vuln-pkg-count">ExS · ${e.exposure_score.toFixed(1)}</span>`
+                        ? `<span class="bucket-badge bucket-${e.exposure_bucket}">ExS · ${e.exposure_score.toFixed(1)}</span>`
                         : "";
-                // Full PURL disambiguates same-name packages from different
-                // ecosystems/versions on one endpoint; falls back to name@version.
-                const pkg = e.purl
-                    ? purlLink(e.purl)
-                    : `${esc(e.package_name)}@${esc(e.package_version)}`;
-                const fixed = e.fixed_version
-                    ? ` · fix ${esc(e.fixed_version)}`
-                    : "";
+                const pkgs = (e.packages || [])
+                    .map((p) => {
+                        // Full PURL disambiguates same-name packages from different
+                        // ecosystems/versions; falls back to name@version.
+                        const ref = p.purl
+                            ? purlLink(p.purl)
+                            : `${esc(p.package_name)}@${esc(p.package_version)}`;
+                        const fixes = (p.fixed_version || "")
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                            .map((v) => `<span class="fix-pill">${esc(v)}</span>`)
+                            .join("");
+                        const fixWrap = fixes
+                            ? `<span class="fix-label">fix</span>${fixes}`
+                            : "";
+                        return `<div class="endpoint-pkg">${ref}${fixWrap}</div>`;
+                    })
+                    .join("");
                 const eid = (e.endpoint_id || "")
                     .replace(/&/g, "&amp;")
                     .replace(/"/g, "&quot;");
                 return `<div class="endpoint-card" data-eid="${eid}" onclick="selectEndpoint(this.dataset.eid)">
                     <div class="endpoint-main">
                         <div class="endpoint-hostname">${esc(e.hostname)}</div>
-                        <div class="endpoint-meta"><span>${esc(e.os)}</span><span>${pkg}${fixed}</span></div>
+                        <div class="endpoint-os-line">${esc(e.os)}</div>
+                        <div class="endpoint-pkgs">${pkgs}</div>
                     </div>
                     ${exp}
                 </div>`;
