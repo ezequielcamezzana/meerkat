@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,7 +16,10 @@ import (
 // UpsertVulnerability writes a freshly-fetched vuln record. fetchedAt stamps
 // when we last pulled it from OSV; it drives the freshness check in GetFreshVulns.
 func (s *DB) UpsertVulnerability(ctx context.Context, v matcher.Vulnerability, canonicalID string, severityScore float64, severitySource string, fetchedAt time.Time) error {
-	aliases, _ := json.Marshal(v.Aliases)
+	// Aliases are every known identifier except the canonical one (which is the
+	// title): the record's own id plus OSV's aliases, minus the canonical. So a
+	// GHSA record whose canonical is the CVE lists [GHSA-…], not [CVE-…].
+	aliases, _ := json.Marshal(otherIDs(v.ID, v.Aliases, canonicalID))
 	upstream, _ := json.Marshal(v.Upstream)
 
 	var publishedAt, modifiedAt string
@@ -49,6 +53,22 @@ func (s *DB) UpsertVulnerability(ctx context.Context, v matcher.Vulnerability, c
 		severityScore, severitySource, fetched,
 	)
 	return err
+}
+
+// otherIDs returns every identifier except the canonical one: the record's own
+// id plus its aliases, deduplicated and with the canonical removed.
+func otherIDs(id string, aliases []string, canonical string) []string {
+	seen := map[string]struct{}{canonical: {}}
+	var out []string
+	for _, candidate := range append([]string{id}, aliases...) {
+		if _, dup := seen[candidate]; dup {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // GetFreshVulns splits ids into cached (stored and fetched within maxAge) and
@@ -189,6 +209,7 @@ type VulnSummary struct {
 	SeverityScore  float64  `json:"severity_score"`
 	ExposureScore  float64  `json:"exposure_score"`
 	ExposureBucket string   `json:"exposure_bucket"`
+	CvssBucket     string   `json:"cvss_bucket"`
 	DiscoveredAt   string   `json:"discovered_at,omitempty"`
 	ModifiedAt     string   `json:"modified_at,omitempty"`
 	AffectedCount  int      `json:"affected_count"`
@@ -269,6 +290,7 @@ func (s *DB) ListTenantVulns(ctx context.Context, tenantID string, q VulnListQue
 		v.DiscoveredAt = discoveredAt.String
 		v.ModifiedAt = modifiedAt.String
 		v.ExposureBucket = scoring.Bucket(v.ExposureScore)
+		v.CvssBucket = scoring.CVSSBucket(v.SeverityScore)
 		json.Unmarshal([]byte(aliasesJSON), &v.Aliases)
 		result = append(result, v)
 	}
@@ -276,16 +298,22 @@ func (s *DB) ListTenantVulns(ctx context.Context, tenantID string, q VulnListQue
 }
 
 // AffectedEndpoint is one endpoint of the tenant where a vuln is present, with
-// the vulnerable package and that endpoint's exposure for the vuln.
+// every vulnerable package on it and the endpoint's worst exposure for the vuln.
 type AffectedEndpoint struct {
-	EndpointID     string  `json:"endpoint_id"`
-	Hostname       string  `json:"hostname"`
-	OS             string  `json:"os"`
-	ExposureScore  float64 `json:"exposure_score"`
-	Purl           string  `json:"purl"`
-	PackageName    string  `json:"package_name"`
-	PackageVersion string  `json:"package_version"`
-	FixedVersion   string  `json:"fixed_version,omitempty"`
+	EndpointID     string               `json:"endpoint_id"`
+	Hostname       string               `json:"hostname"`
+	OS             string               `json:"os"`
+	ExposureScore  float64              `json:"exposure_score"`
+	ExposureBucket string               `json:"exposure_bucket"`
+	Packages       []AffectedPackageRef `json:"packages"`
+}
+
+// AffectedPackageRef is one vulnerable package on an affected endpoint.
+type AffectedPackageRef struct {
+	Purl           string `json:"purl"`
+	PackageName    string `json:"package_name"`
+	PackageVersion string `json:"package_version"`
+	FixedVersion   string `json:"fixed_version,omitempty"`
 }
 
 // VulnDetail is the lazily-loaded body of a vuln card: the advisory plus every
@@ -295,9 +323,9 @@ type VulnDetail struct {
 	Aliases           []string           `json:"aliases,omitempty"`
 	Summary           string             `json:"summary"`
 	Details           string             `json:"details"`
-	PublishedAt       string             `json:"published_at,omitempty"`
-	ModifiedAt        string             `json:"modified_at,omitempty"`
-	AffectedEndpoints []AffectedEndpoint `json:"affected_endpoints"`
+	PublishedAt       string              `json:"published_at,omitempty"`
+	ModifiedAt        string              `json:"modified_at,omitempty"`
+	AffectedEndpoints []*AffectedEndpoint `json:"affected_endpoints"`
 }
 
 // GetTenantVulnDetail returns the advisory for a canonical_id plus the tenant's
@@ -354,15 +382,37 @@ func (s *DB) GetTenantVulnDetail(ctx context.Context, tenantID, canonicalID stri
 	}
 	defer rows.Close()
 
+	// COMPLEX: the canonical groups several vuln ids (CVE/GHSA/GO), so the same
+	// endpoint+package appears once per id. Collapse to one endpoint with its
+	// distinct packages. Rows arrive by exposure DESC, so an endpoint's first row
+	// carries its worst exposure and is kept as the box's score.
+	byEndpoint := map[string]*AffectedEndpoint{}
+	seenPkg := map[string]struct{}{}
 	for rows.Next() {
-		var a AffectedEndpoint
+		var endpointID, hostname, os, purl, name, version, fixed string
+		var exposure float64
 		if err := rows.Scan(
-			&a.EndpointID, &a.Hostname, &a.OS, &a.ExposureScore,
-			&a.Purl, &a.PackageName, &a.PackageVersion, &a.FixedVersion,
+			&endpointID, &hostname, &os, &exposure,
+			&purl, &name, &version, &fixed,
 		); err != nil {
 			return nil, err
 		}
-		detail.AffectedEndpoints = append(detail.AffectedEndpoints, a)
+		ep := byEndpoint[endpointID]
+		if ep == nil {
+			ep = &AffectedEndpoint{
+				EndpointID: endpointID, Hostname: hostname, OS: os,
+				ExposureScore: exposure, ExposureBucket: scoring.Bucket(exposure),
+			}
+			byEndpoint[endpointID] = ep
+			detail.AffectedEndpoints = append(detail.AffectedEndpoints, ep)
+		}
+		if _, dup := seenPkg[endpointID+"\x00"+purl]; dup {
+			continue
+		}
+		seenPkg[endpointID+"\x00"+purl] = struct{}{}
+		ep.Packages = append(ep.Packages, AffectedPackageRef{
+			Purl: purl, PackageName: name, PackageVersion: version, FixedVersion: fixed,
+		})
 	}
 	return detail, rows.Err()
 }

@@ -104,7 +104,9 @@ func TestGetVuln_Found(t *testing.T) {
 	require.Len(t, affected, 1)
 	ep := affected[0].(map[string]any)
 	assert.Equal(t, "ep-vuln", ep["endpoint_id"])
-	assert.Equal(t, "lodash", ep["package_name"])
+	pkgs := ep["packages"].([]any)
+	require.Len(t, pkgs, 1)
+	assert.Equal(t, "lodash", pkgs[0].(map[string]any)["package_name"])
 }
 
 func TestGetVuln_NotFound(t *testing.T) {

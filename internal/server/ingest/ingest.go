@@ -148,7 +148,7 @@ func (i *Ingest) evaluate(ctx context.Context, endpoint api.Endpoint, packages [
 			scoring.KindWeight(enriched[idx].PackageKind),
 		)
 		enriched[idx].FixedVersion = matcher.FixedVersion(
-			enriched[idx].Vulnerability.Raw, enriched[idx].PackageName)
+			enriched[idx].Vulnerability.Raw, enriched[idx].PackageName, enriched[idx].PackageVersion)
 	}
 
 	if err := i.db.ReplaceEndpointVulnerabilities(ctx, endpoint.ID, enriched, now); err != nil {

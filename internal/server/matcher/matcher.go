@@ -5,16 +5,20 @@ package matcher
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/ezequielcamezzana/meerkat/pkg/api"
 )
 
 // FixedVersion extracts the version(s) that resolve a vuln for a given package
 // from the raw OSV record (affected[].ranges[].events[].fixed), matched by
-// package name. Returns "" when OSV lists no fix (no patch available yet).
-func FixedVersion(raw json.RawMessage, packageName string) string {
+// package name. Only fixes newer than installedVersion are kept (an older fix
+// is no upgrade target), sorted ascending so the highest is last. Returns ""
+// when OSV lists no applicable fix.
+func FixedVersion(raw json.RawMessage, packageName, installedVersion string) string {
 	var rec struct {
 		Affected []struct {
 			Package struct {
@@ -46,7 +50,31 @@ func FixedVersion(raw json.RawMessage, packageName string) string {
 			}
 		}
 	}
-	return strings.Join(fixed, ", ")
+	return strings.Join(upgradeTargets(fixed, installedVersion), ", ")
+}
+
+// upgradeTargets keeps the fix versions strictly newer than installed, sorted
+// ascending (highest last). Versions that don't parse as semver are kept as-is
+// rather than silently dropped — better to show a maybe-irrelevant fix than none.
+func upgradeTargets(fixed []string, installed string) []string {
+	current, err := semver.NewVersion(installed)
+	var parsed []*semver.Version
+	var kept []string
+	for _, f := range fixed {
+		fv, ferr := semver.NewVersion(f)
+		if err != nil || ferr != nil {
+			kept = append(kept, f) // can't compare → don't drop
+			continue
+		}
+		if fv.GreaterThan(current) {
+			parsed = append(parsed, fv)
+		}
+	}
+	sort.Slice(parsed, func(i, j int) bool { return parsed[i].LessThan(parsed[j]) })
+	for _, v := range parsed {
+		kept = append(kept, v.Original())
+	}
+	return kept
 }
 
 // VulnMatcher splits OSV access into two steps so callers can interpose a

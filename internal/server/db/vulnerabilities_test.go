@@ -162,7 +162,9 @@ func TestGetTenantVulnDetail_Found(t *testing.T) {
 	if got.AffectedEndpoints[0].Hostname != "h2" || got.AffectedEndpoints[0].ExposureScore != 9.5 {
 		t.Errorf("e2 fields: %+v", got.AffectedEndpoints[0])
 	}
-	if got.AffectedEndpoints[0].PackageName != "a" || got.AffectedEndpoints[0].PackageVersion != "1" {
+	if len(got.AffectedEndpoints[0].Packages) != 1 ||
+		got.AffectedEndpoints[0].Packages[0].PackageName != "a" ||
+		got.AffectedEndpoints[0].Packages[0].PackageVersion != "1" {
 		t.Errorf("e2 package: %+v", got.AffectedEndpoints[0])
 	}
 }

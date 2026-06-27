@@ -3,6 +3,7 @@ module github.com/ezequielcamezzana/meerkat
 go 1.25.8
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/anchore/syft v1.44.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/go-chi/chi/v5 v5.3.0
@@ -36,7 +37,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.14.1 // indirect

@@ -55,7 +55,7 @@ func handleGetVuln(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if detail.AffectedEndpoints == nil {
-			detail.AffectedEndpoints = []db.AffectedEndpoint{}
+			detail.AffectedEndpoints = []*db.AffectedEndpoint{}
 		}
 		writeJSON(w, http.StatusOK, detail)
 	}
