@@ -89,7 +89,7 @@ func (s *DB) GetFreshVulns(ctx context.Context, ids []string, maxAge time.Durati
 	}
 	args = append(args, cutoff)
 
-	query := `SELECT id, aliases, upstream, summary, details, published_at, modified_at, source, raw
+	query := `SELECT id, canonical_id, aliases, upstream, summary, details, published_at, modified_at, source, raw
 		FROM vulnerabilities
 		WHERE id IN (` + strings.Join(placeholders, ",") + `) AND fetched_at <> '' AND fetched_at >= ?`
 
@@ -102,7 +102,7 @@ func (s *DB) GetFreshVulns(ctx context.Context, ids []string, maxAge time.Durati
 	for rows.Next() {
 		var v matcher.Vulnerability
 		var aliasesJSON, upstreamJSON, publishedAt, modifiedAt, raw string
-		if err := rows.Scan(&v.ID, &aliasesJSON, &upstreamJSON, &v.Summary, &v.Details,
+		if err := rows.Scan(&v.ID, &v.CanonicalID, &aliasesJSON, &upstreamJSON, &v.Summary, &v.Details,
 			&publishedAt, &modifiedAt, &v.Source, &raw); err != nil {
 			return nil, nil, err
 		}

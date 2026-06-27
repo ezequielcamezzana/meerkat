@@ -135,4 +135,10 @@ type Vulnerability struct {
 	ModifiedAt  time.Time
 	Source      string
 	Raw         json.RawMessage
+	// CanonicalID is the authoritative canonical resolved when the record was
+	// fetched, carried by cache reads. Empty on fresh OSV fetches (Canonical
+	// computes it then). WHY: the stored `aliases` column drops the canonical
+	// for display, so re-deriving from a cached struct would lose it — Canonical
+	// must prefer this when set.
+	CanonicalID string
 }
